@@ -19,8 +19,6 @@
 #define ASSURE_TYPE_ALIAS(a, b) \
     BUILD_BUG_ON(!__builtin_types_compatible_p(__typeof__(a), __typeof__(b)))
 
-#define SIN_LEN     __offsetof(struct sockaddr_in, sin_zero)
-
 #define ENDPOINT    "52.20.38.43"
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
@@ -40,10 +38,11 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     if (e != 0) {
         LOG_ERR("sock_socket() fail  errno: %d", e);
         e = KERN_FAILURE;
+        goto out_exit;
     }
 
     bzero(&sin, sizeof(sin));
-    sin.sin_len = SIN_LEN;
+    sin.sin_len = sizeof(sin);
     sin.sin_family = PF_INET;
     sin.sin_port = htons(80);
     e = inet_aton(ENDPOINT, &sin.sin_addr);
@@ -53,12 +52,15 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     if (e != 0) {
         LOG_ERR("sock_connect() fail  errno: %d", e);
         e = KERN_FAILURE;
+        goto out_close;
     }
 
-    LOG("Endpoint " ENDPOINT "connected!");
+    LOG("Endpoint " ENDPOINT " connected!");
 
+out_close:
     sock_close(so);
-    return KERN_SUCCESS;
+out_exit:
+    return e;
 }
 
 kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
