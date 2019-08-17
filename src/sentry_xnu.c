@@ -58,7 +58,8 @@ static int so_send_recv_n(
         }
     }
 
-    LOG_DBG("send/recv size: %lu", (unsigned long) n);
+    LOG_DBG("%s size: %lu", send ? "send" : "recv", (unsigned long) n);
+
     return e;
 }
 
@@ -99,14 +100,14 @@ static void pseudo_http_post(socket_t so, const char *arg, const char *msg)
     }
 
     LOG_DBG("Receiving..");
-    (void) snprintf(buf, BUFSZ, "(no data available)");
+    (void) snprintf(buf, BUFSZ, "<no data>");
     e = so_recv_n(so, buf, BUFSZ, MSG_WAITALL);
-    if (e != 0) {
+    if (e != 0 && e != -ENODATA) {
         LOG_ERR("so_recv_n() fail  errno: %d", e);
-        if (e != -ENODATA) return;
+        return;
     }
 
-    LOG("HTTP POST response: %s", buf);
+    LOG("HTTP POST response:\n%s", buf);
 }
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
