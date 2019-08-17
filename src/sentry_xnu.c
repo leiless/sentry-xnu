@@ -82,7 +82,8 @@ static inline int so_recv_n(socket_t so, void *buf, size_t size, int flags)
     return so_send_recv_n(so, buf, size, flags, false);
 }
 
-/*
+/**
+ * Get unix time stamp in seconds
  * see:
  *  Miscellaneous Kernel Services - Apple Developer
  *  https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/KernelProgramming/services/services.html
@@ -175,11 +176,15 @@ static void format_iso8601_time(char *buf, size_t sz)
                 "Why tm.sec %u >= %u?!", tm.sec, EPOCH_MINUTE_SECS);
 
     n = snprintf(buf, sz, "%04u-%02u-%02uT%02u:%02u:%02u",
-            tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.sec);
+            tm.year + 1970, tm.month + 1, tm.day + 1,
+            tm.hour, tm.minute, tm.sec);
     kassertf(n >= 0, "snprintf() fail  n: %d", n);
 }
 
-static void format_message_payload(char *buf, size_t sz, const char * __nullable msg)
+static void format_message_payload(
+        char *buf,
+        size_t sz,
+        const char * __nullable msg)
 {
     int n;
     uuid_string_t u;
@@ -218,7 +223,7 @@ static void sentry_capture_message(socket_t so, const char *msg)
     kassert_nonnull(so);
     kassert_nonnull(msg);
 
-    format_x_sentry_auth(auth, sizeof(auth), 7, "SENTRY_PUBKEY");
+    format_x_sentry_auth(auth, sizeof(auth), 7, SENTRY_PUBKEY);
     format_message_payload(payload, sizeof(payload), msg);
 
     (void) snprintf(buf, BUFSZ, "POST /api/1/store/ HTTP/1.1\r\n"
