@@ -81,7 +81,6 @@
 #endif
 
 #define kassert_nonnull(ptr)    kassert(ptr != NULL)
-#define kassert_null(ptr)       kassert(ptr == NULL)
 
 #endif /* SENTRY_XNU_UTILS_H */
 

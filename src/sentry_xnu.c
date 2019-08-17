@@ -5,11 +5,11 @@
 #include <mach/mach_types.h>
 #include <libkern/libkern.h>
 
+#include <sys/errno.h>
+#include <sys/time.h>
+
 #include <sys/socket.h>     /* PF_INET */
-//#include <sys/ubc.h>
-#include <sys/un.h>
 #include <netinet/in.h>     /* IPPROTO_IP */
-//#include <netinet/tcp.h>
 
 #include "utils.h"
 
@@ -21,6 +21,94 @@
 
 #define ENDPOINT    "52.20.38.43"       /* postman-echo.com */
 
+/**
+ * see:
+ *  benavento/mac9p/blob/master/kext/socket.c#recvsendn_9p
+ *  https://stackoverflow.com/q/3198049/10725426
+ *  https://stackoverflow.com/q/15938022/10725426
+ */
+static int so_send_recv_n(
+        socket_t so,
+        void *buf,
+        size_t size,
+        int flags,
+        bool send)
+{
+    int e = 0;
+    errno_t (*sock_op)(socket_t, /* [const] */ struct msghdr *, int, size_t *);
+    struct iovec aio;
+    struct msghdr msg;
+    size_t i, n;
+
+    sock_op = send ? (__typeof__(sock_op)) sock_send : sock_receive;
+
+    for (n = 0; n < size; n += i) {
+        i = 0;
+
+        aio.iov_base = buf + n;
+        aio.iov_len = size - n;
+        bzero(&msg, sizeof(msg));
+        msg.msg_iov = &aio;
+        msg.msg_iovlen = 1;
+
+        e = sock_op(so, &msg, flags, &i);
+        if (e != 0 || i == 0) {
+            if (e == 0) e = -ENODATA; /* Distinguish return value */
+            break;
+        }
+    }
+
+    LOG_DBG("send/recv size: %lu", (unsigned long) n);
+    return e;
+}
+
+static inline int so_send_n(socket_t so, void *buf, size_t size, int flags)
+{
+    return so_send_recv_n(so, buf, size, flags, true);
+}
+
+static inline int so_recv_n(socket_t so, void *buf, size_t size, int flags)
+{
+    return so_send_recv_n(so, buf, size, flags, false);
+}
+
+#define BUFSZ       1024
+
+static void pseudo_http_post(socket_t so, const char *arg, const char *msg)
+{
+    int e;
+    char buf[BUFSZ];
+
+    kassert_nonnull(so);
+    kassert_nonnull(arg);
+    kassert_nonnull(msg);
+
+    (void) snprintf(buf, BUFSZ, "POST /post?arg=%s HTTP/1.0\r\n"
+                                "Content-Type: text/plain\r\n"
+                                "Content-Length: %zu\r\n"
+                                "\r\n%s",
+                                arg, strlen(msg), msg);
+
+    LOG_DBG("%s", buf);
+
+    LOG_DBG("Sending..");
+    e = so_send_n(so, buf, strlen(buf), MSG_WAITALL);
+    if (e != 0) {
+        LOG_ERR("so_send_n() fail  errno: %d", e);
+        return;
+    }
+
+    LOG_DBG("Receiving..");
+    (void) snprintf(buf, BUFSZ, "(no data available)");
+    e = so_recv_n(so, buf, BUFSZ, MSG_WAITALL);
+    if (e != 0) {
+        LOG_ERR("so_recv_n() fail  errno: %d", e);
+        if (e != -ENODATA) return;
+    }
+
+    LOG("HTTP POST response:\n%s\n", buf);
+}
+
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
@@ -28,6 +116,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     int e;
     socket_t so = NULL;
     struct sockaddr_in sin;
+    struct timeval tv;
 
     ASSURE_TYPE_ALIAS(errno_t, int);
     ASSURE_TYPE_ALIAS(kern_return_t, int);
@@ -67,6 +156,25 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     LOG("Endpoint " ENDPOINT "  connected: %d nonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
+
+    tv.tv_sec = 10;
+    tv.tv_usec = 0;
+
+    e = sock_setsockopt(so, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_SNDTIMEO fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    pseudo_http_post(so, "foobar", "hello world!");
 
 out_close:
     sock_close(so);
