@@ -106,7 +106,7 @@ static void pseudo_http_post(socket_t so, const char *arg, const char *msg)
         if (e != -ENODATA) return;
     }
 
-    LOG("HTTP POST response:\n%s\n", buf);
+    LOG("HTTP POST response: %s", buf);
 }
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
