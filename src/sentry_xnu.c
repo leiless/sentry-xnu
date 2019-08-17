@@ -7,6 +7,7 @@
 
 #include <sys/errno.h>
 #include <sys/time.h>
+#include <kern/clock.h>
 
 #include <sys/socket.h>     /* PF_INET */
 #include <netinet/in.h>     /* IPPROTO_IP */
@@ -19,7 +20,15 @@
 #define ASSURE_TYPE_ALIAS(a, b) \
     BUILD_BUG_ON(!__builtin_types_compatible_p(__typeof__(a), __typeof__(b)))
 
-#define ENDPOINT    "52.20.38.43"       /* postman-echo.com */
+/*
+ * DNS A-record of sentry.io
+ * TODO: implement a in-kernel gethostbyname()
+ */
+#define SENTRY_IP           "35.188.42.15"
+
+#define SENTRY_XNU_NAME     "sentry-udev"
+#define SENTRY_XNU_VER      "0.1"
+#define SENTRY_UA           SENTRY_XNU_NAME "/" SENTRY_XNU_VER
 
 /**
  * see:
@@ -73,22 +82,151 @@ static inline int so_recv_n(socket_t so, void *buf, size_t size, int flags)
     return so_send_recv_n(so, buf, size, flags, false);
 }
 
-#define BUFSZ       1024
+/*
+ * see:
+ *  Miscellaneous Kernel Services - Apple Developer
+ *  https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/KernelProgramming/services/services.html
+ */
+static clock_sec_t time(clock_sec_t * __nullable p)
+{
+    clock_sec_t s;
+    clock_usec_t __unused u;
+    clock_get_calendar_microtime(&s, &u);
+    if (p != NULL) *p = s;
+    return s;
+}
 
-static void pseudo_http_post(socket_t so, const char *arg, const char *msg)
+static void format_x_sentry_auth(
+        char *buf,
+        size_t sz,
+        uint32_t ver,
+        const char *key)
+{
+    int n;
+    kassert_nonnull(buf);
+    kassert(sz != 0);
+    kassert_nonnull(key);
+    /* snprintf() always return value >= 0 */
+    n = snprintf(buf, sz,
+            "Sentry "
+            "sentry_version=%u, "
+            "sentry_timestamp=%lu, "
+            "sentry_key=%s", ver, time(NULL), key);
+    kassertf(n >= 0, "snprintf() fail  n: %d", n);
+}
+
+static void uuid_string_generate(uuid_string_t out)
+{
+    uuid_t u;
+    kassert_nonnull(out);
+    uuid_generate_random(u);
+    uuid_unparse_lower(u, out);
+}
+
+#define ISO8601_TM_BUFSZ    20u
+
+#define EPOCH_YEAR_SECS     31556926u
+#define EPOCH_MONTH_SECS    2629743u
+#define EPOCH_DAY_SECS      86400u
+#define EPOCH_HOUR_SECS     3600u
+#define EPOCH_MINUTE_SECS   60u
+
+struct kern_tm {
+    uint32_t year;
+    uint32_t month;
+    uint32_t day;
+    uint32_t hour;
+    uint32_t minute;
+    uint32_t sec;
+};
+
+/* NOTE: buggy implementation */
+static void format_iso8601_time(char *buf, size_t sz)
+{
+    int n;
+    clock_sec_t t;
+
+    struct kern_tm tm;
+
+    kassert_nonnull(buf);
+    kassertf(sz >= ISO8601_TM_BUFSZ,
+                "Insufficient ISO-8601 time buffer size  %zu vs %u",
+                sz, ISO8601_TM_BUFSZ);
+
+    t = time(NULL);
+
+    tm.year = (uint32_t) t / EPOCH_YEAR_SECS;
+    t -= tm.year * EPOCH_YEAR_SECS;
+
+    tm.month = (uint32_t) t / EPOCH_MONTH_SECS;
+    t -= tm.month * EPOCH_MONTH_SECS;
+
+    tm.day = (uint32_t) t / EPOCH_DAY_SECS;
+    t -= tm.day * EPOCH_DAY_SECS;
+
+    tm.hour = (uint32_t) t / EPOCH_HOUR_SECS;
+    t -= tm.hour * EPOCH_HOUR_SECS;
+
+    tm.minute = (uint32_t) t / EPOCH_MINUTE_SECS;
+    t -= tm.minute * EPOCH_MINUTE_SECS;
+
+    tm.sec = (uint32_t) t;
+    kassertf(tm.sec < EPOCH_MINUTE_SECS,
+                "Why tm.sec %u >= %u?!", tm.sec, EPOCH_MINUTE_SECS);
+
+    n = snprintf(buf, sz, "%04u-%02u-%02uT%02u:%02u:%02u",
+            tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.sec);
+    kassertf(n >= 0, "snprintf() fail  n: %d", n);
+}
+
+static void format_message_payload(char *buf, size_t sz, const char * __nullable msg)
+{
+    int n;
+    uuid_string_t u;
+    char t[ISO8601_TM_BUFSZ];
+
+    kassert_nonnull(buf);
+    kassert(sz != 0);
+
+    uuid_string_generate(u);
+    format_iso8601_time(t, sizeof(t));
+
+    n = snprintf(buf, sz,
+            "{\"event_id\":\"%s\","
+            "\"timestamp\":\"%s\","
+            "\"logger\":\"(default)\","
+            "\"platform\":\"c\","
+            "\"sdk\":{\"name\":\"" SENTRY_XNU_NAME "\",\"version\":\"" SENTRY_XNU_VER "\"},"
+            "\"message\":\"%s\""
+            "}", u, t, msg);
+    kassertf(n >= 0, "snprintf() fail  n: %d", n);
+}
+
+#define BUFSZ           4096
+#define AUTHSZ          192
+#define PAYLOADSZ       1024
+
+#define SENTRY_PUBKEY   "3bebc23f79274f93b6500e3ecf0cf22b"
+
+static void sentry_capture_message(socket_t so, const char *msg)
 {
     int e;
     char buf[BUFSZ];
+    char auth[AUTHSZ];
+    char payload[PAYLOADSZ];
 
     kassert_nonnull(so);
-    kassert_nonnull(arg);
     kassert_nonnull(msg);
 
-    (void) snprintf(buf, BUFSZ, "POST /post?arg=%s HTTP/1.0\r\n"
-                                "Content-Type: text/plain\r\n"
+    format_x_sentry_auth(auth, sizeof(auth), 7, "SENTRY_PUBKEY");
+    format_message_payload(payload, sizeof(payload), msg);
+
+    (void) snprintf(buf, BUFSZ, "POST /api/1/store/ HTTP/1.1\r\n"
+                                "User-Agent: " SENTRY_UA "\r\n"
+                                "X-Sentry-Auth: %s\r\n"
+                                "Content-Type: application/json\r\n"
                                 "Content-Length: %zu\r\n"
-                                "\r\n%s",
-                                arg, strlen(msg), msg);
+                                "\r\n%s", auth, strlen(payload), payload);
 
     LOG_DBG("%s", buf);
 
@@ -145,8 +283,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     sin.sin_len = sizeof(sin);
     sin.sin_family = PF_INET;
     sin.sin_port = htons(80);
-    e = inet_aton(ENDPOINT, &sin.sin_addr);
-    kassertf(e == 1, "inet_aton() fail  endpoint: " ENDPOINT);
+    e = inet_aton(SENTRY_IP, &sin.sin_addr);
+    kassertf(e == 1, "inet_aton() fail  endpoint: " SENTRY_IP);
 
     e = sock_connect(so, (struct sockaddr *) &sin, 0);
     if (e != 0) {
@@ -155,7 +293,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_close;
     }
 
-    LOG("Endpoint " ENDPOINT "  connected: %d nonblocking: %d",
+    LOG("Endpoint " SENTRY_IP "  connected: %d nonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
 
     tv.tv_sec = 10;
@@ -175,7 +313,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_shutdown;
     }
 
-    pseudo_http_post(so, "foobar", "hello world!");
+    sentry_capture_message(so, "hello world!");
 
 out_shutdown:
     e2 = sock_shutdown(so, SHUT_RDWR);
