@@ -19,7 +19,7 @@
 #define ASSURE_TYPE_ALIAS(a, b) \
     BUILD_BUG_ON(!__builtin_types_compatible_p(__typeof__(a), __typeof__(b)))
 
-#define ENDPOINT    "52.20.38.43"
+#define ENDPOINT    "52.20.38.43"       /* postman-echo.com */
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
@@ -42,6 +42,16 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     }
 
     bzero(&sin, sizeof(sin));
+    /*
+     * XXX:
+     *  (struct sockaddr).sin_len must be sizeof(struct sockaddr)
+     *  otherwise sock_connect will return EINVAL
+     *
+     * see:
+     *  xnu/bsd/kern/kpi_socket.c#sock_connect
+     *  xnu/bsd/kern/uipc_socket.c#soconnectlock
+     *  xnu/bsd/netinet/raw_ip.c#rip_usrreqs, rip_connect
+     */
     sin.sin_len = sizeof(sin);
     sin.sin_family = PF_INET;
     sin.sin_port = htons(80);
@@ -55,7 +65,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_close;
     }
 
-    LOG("Endpoint " ENDPOINT " connected!");
+    LOG("Endpoint " ENDPOINT "  connected: %d nonblocking: %d",
+            sock_isconnected(so), sock_isnonblocking(so));
 
 out_close:
     sock_close(so);
@@ -66,7 +77,7 @@ out_exit:
 kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
-    LOG(KEXTNAME_S " unloading..");
+    LOG("unloading..");
     return KERN_SUCCESS;
 }
 
