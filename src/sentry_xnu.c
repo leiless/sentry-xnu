@@ -114,7 +114,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
 
-    int e;
+    int e, e2;
     socket_t so = NULL;
     struct sockaddr_in sin;
     struct timeval tv;
@@ -165,18 +165,21 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     if (e != 0) {
         LOG_ERR("sock_setsockopt() SO_SNDTIMEO fail  errno: %d", e);
         e = KERN_FAILURE;
-        goto out_close;
+        goto out_shutdown;
     }
 
     e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     if (e != 0) {
         LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
         e = KERN_FAILURE;
-        goto out_close;
+        goto out_shutdown;
     }
 
     pseudo_http_post(so, "foobar", "hello world!");
 
+out_shutdown:
+    e2 = sock_shutdown(so, SHUT_RDWR);
+    if (e2 != 0) LOG_ERR("sock_shutdown() RDWR fail  errno: %d", e2);
 out_close:
     sock_close(so);
 out_exit:
