@@ -31,53 +31,64 @@
 #define SENTRY_UA           SENTRY_XNU_NAME "/" SENTRY_XNU_VER
 
 /**
+ * sock_send() and sock_receive() uses `int' type as its flag
+ *  additional pseudo flags should > UINT_MAX
+ */
+#define MSG_SENDRECV_ONCE   0x100000000ULL
+
+/**
  * see:
  *  benavento/mac9p/blob/master/kext/socket.c#recvsendn_9p
  *  https://stackoverflow.com/q/3198049/10725426
  *  https://stackoverflow.com/q/15938022/10725426
+ * @return      0 if success, errno otherwise
  */
 static int so_send_recv_n(
         socket_t so,
         void *buf,
         size_t size,
-        int flags,
+        uint64_t flags,
         bool send)
 {
     int e = 0;
     errno_t (*sock_op)(socket_t, /* [const] */ struct msghdr *, int, size_t *);
     struct iovec aio;
     struct msghdr msg;
-    size_t i, n;
+    size_t i, n = 0;
+
+    kassert_nonnull(so);
+    kassert(!!buf | !size);
 
     sock_op = send ? (__typeof__(sock_op)) sock_send : sock_receive;
 
-    for (n = 0; n < size; n += i) {
-        i = 0;
-
+    while (n < size) {
         aio.iov_base = buf + n;
         aio.iov_len = size - n;
         bzero(&msg, sizeof(msg));
         msg.msg_iov = &aio;
         msg.msg_iovlen = 1;
 
-        e = sock_op(so, &msg, flags, &i);
+        e = sock_op(so, &msg, (int) flags, &i);
         if (e != 0 || i == 0) {
-            if (e == 0) e = -ENODATA; /* Distinguish return value */
+            if (e == 0) e = -ESHUTDOWN; /* Distinguish return value */
             break;
         }
+
+        n += i;
+        if (flags & MSG_SENDRECV_ONCE) break;
     }
 
-    LOG_DBG("%s size: %lu", send ? "send" : "recv", (unsigned long) n);
+    LOG_DBG("%s size: %zu", send ? "send" : "recv", n);
 
     return e;
 }
 
-static inline int so_send_n(socket_t so, void *buf, size_t size, int flags)
+static inline int so_send_n(socket_t so, void *buf, size_t size, uint64_t flags)
 {
     return so_send_recv_n(so, buf, size, flags, true);
 }
 
-static inline int so_recv_n(socket_t so, void *buf, size_t size, int flags)
+static inline int so_recv_n(socket_t so, void *buf, size_t size, uint64_t flags)
 {
     return so_send_recv_n(so, buf, size, flags, false);
 }
@@ -141,7 +152,7 @@ struct kern_tm {
     uint32_t sec;
 };
 
-/* NOTE: buggy implementation */
+/* XXX: buggy implementation */
 static void format_iso8601_time(char *buf, size_t sz)
 {
     int n;
@@ -207,10 +218,11 @@ static void format_message_payload(
     kassertf(n >= 0, "snprintf() fail  n: %d", n);
 }
 
-#define BUFSZ           4096
+#define BUFSZ           2048
 #define AUTHSZ          192
 #define PAYLOADSZ       1024
 
+#define SENTRY_PROJID   "1533302"
 #define SENTRY_PUBKEY   "3bebc23f79274f93b6500e3ecf0cf22b"
 
 static void sentry_capture_message(socket_t so, const char *msg)
@@ -226,7 +238,8 @@ static void sentry_capture_message(socket_t so, const char *msg)
     format_x_sentry_auth(auth, sizeof(auth), 7, SENTRY_PUBKEY);
     format_message_payload(payload, sizeof(payload), msg);
 
-    (void) snprintf(buf, BUFSZ, "POST /api/1/store/ HTTP/1.1\r\n"
+    (void) snprintf(buf, BUFSZ, "POST /api/" SENTRY_PROJID "/store/ HTTP/1.1\r\n"
+                                "Host: sentry.io\r\n"
                                 "User-Agent: " SENTRY_UA "\r\n"
                                 "X-Sentry-Auth: %s\r\n"
                                 "Content-Type: application/json\r\n"
@@ -244,8 +257,8 @@ static void sentry_capture_message(socket_t so, const char *msg)
 
     LOG_DBG("Receiving..");
     (void) snprintf(buf, BUFSZ, "<no data>");
-    e = so_recv_n(so, buf, BUFSZ, MSG_WAITALL);
-    if (e != 0 && e != -ENODATA) {
+    e = so_recv_n(so, buf, BUFSZ, MSG_SENDRECV_ONCE);
+    if (e != 0) {
         LOG_ERR("so_recv_n() fail  errno: %d", e);
         return;
     }
@@ -301,7 +314,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     LOG("Endpoint " SENTRY_IP "  connected: %d nonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
 
-    tv.tv_sec = 10;
+    tv.tv_sec = 5;
     tv.tv_usec = 0;
 
     e = sock_setsockopt(so, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
@@ -318,7 +331,9 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_shutdown;
     }
 
-    sentry_capture_message(so, "hello world!");
+    char buf[128];
+    (void) snprintf(buf, sizeof(buf), "hello world! %#x", random());
+    sentry_capture_message(so, buf);
 
 out_shutdown:
     e2 = sock_shutdown(so, SHUT_RDWR);
@@ -326,7 +341,11 @@ out_shutdown:
 out_close:
     sock_close(so);
 out_exit:
+#ifdef DEBUG
+    return KERN_FAILURE;
+#else
     return e;
+#endif
 }
 
 kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
