@@ -31,19 +31,18 @@
 #define SENTRY_UA           SENTRY_XNU_NAME "/" SENTRY_XNU_VER
 
 /**
- * sock_send() and sock_receive() uses `int' type as its flag
- *  additional pseudo flags should > UINT_MAX
- */
-#define MSG_SENDRECV_ONCE   0x100000000ULL
-
-/**
+ * Send or receive from a socket
+ *
+ * If you intended to send/recv a full request, please use MSG_WAITALL
+ * see: xnu/bsd/kern/uipc_socket.c#soreceive()
+ *
  * see:
  *  benavento/mac9p/blob/master/kext/socket.c#recvsendn_9p
  *  https://stackoverflow.com/q/3198049/10725426
  *  https://stackoverflow.com/q/15938022/10725426
  * @return      0 if success, errno otherwise
  */
-static int so_send_recv_n(
+static int so_send_recv(
         socket_t so,
         void *buf,
         size_t size,
@@ -75,7 +74,7 @@ static int so_send_recv_n(
         }
 
         n += i;
-        if (flags & MSG_SENDRECV_ONCE) break;
+        if (!(flags & MSG_WAITALL)) break;
     }
 
     LOG_DBG("%s size: %zu", send ? "send" : "recv", n);
@@ -83,14 +82,14 @@ static int so_send_recv_n(
     return e;
 }
 
-static inline int so_send_n(socket_t so, void *buf, size_t size, uint64_t flags)
+static inline int so_send(socket_t so, void *buf, size_t size, uint64_t flags)
 {
-    return so_send_recv_n(so, buf, size, flags, true);
+    return so_send_recv(so, buf, size, flags, true);
 }
 
-static inline int so_recv_n(socket_t so, void *buf, size_t size, uint64_t flags)
+static inline int so_recv(socket_t so, void *buf, size_t size, uint64_t flags)
 {
-    return so_send_recv_n(so, buf, size, flags, false);
+    return so_send_recv(so, buf, size, flags, false);
 }
 
 /**
@@ -108,6 +107,10 @@ static clock_sec_t time(clock_sec_t * __nullable p)
     return s;
 }
 
+/**
+ * NOET: sentry_client not enclose, use User-Agent header instead
+ * see: https://docs.sentry.io/development/sdk-dev/overview/#authentication
+ */
 static void format_x_sentry_auth(
         char *buf,
         size_t sz,
@@ -246,24 +249,24 @@ static void sentry_capture_message(socket_t so, const char *msg)
                                 "Content-Length: %zu\r\n"
                                 "\r\n%s", auth, strlen(payload), payload);
 
-    LOG_DBG("%s", buf);
+    LOG_DBG("POST size: %zu\n%s", strlen(buf), buf);
 
     LOG_DBG("Sending..");
-    e = so_send_n(so, buf, strlen(buf), MSG_WAITALL);
+    e = so_send(so, buf, strlen(buf), MSG_WAITALL);
     if (e != 0) {
-        LOG_ERR("so_send_n() fail  errno: %d", e);
+        LOG_ERR("so_send() fail  errno: %d", e);
         return;
     }
 
     LOG_DBG("Receiving..");
     (void) snprintf(buf, BUFSZ, "<no data>");
-    e = so_recv_n(so, buf, BUFSZ, MSG_SENDRECV_ONCE);
+    e = so_recv(so, buf, BUFSZ, 0);
     if (e != 0) {
-        LOG_ERR("so_recv_n() fail  errno: %d", e);
+        LOG_ERR("so_recv() fail  errno: %d", e);
         return;
     }
 
-    LOG("HTTP POST response:\n%s", buf);
+    LOG("Response size: %zu\n%s", strlen(buf), buf);
 }
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
