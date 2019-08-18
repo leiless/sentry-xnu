@@ -176,10 +176,9 @@ static void format_iso8601_time(char *buf, size_t sz)
 {
     int n;
     clock_sec_t t;
+    struct pseudo_tm tm;
     uint32_t i;
     const uint32_t *p;
-
-    struct pseudo_tm tm;
 
     kassert_nonnull(buf);
     kassertf(sz >= ISO8601_TM_BUFSZ,
