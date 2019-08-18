@@ -44,7 +44,7 @@
  */
 static int so_send_recv(
         socket_t so,
-        void *buf,
+        char *buf,
         size_t size,
         uint64_t flags,
         bool send)
@@ -77,17 +77,21 @@ static int so_send_recv(
         if (!(flags & MSG_WAITALL)) break;
     }
 
+    if (e == 0 && !send && n < size) {
+        buf[n] = '\0';
+    }
+
     LOG_DBG("%s size: %zu", send ? "send" : "recv", n);
 
     return e;
 }
 
-static inline int so_send(socket_t so, void *buf, size_t size, uint64_t flags)
+static inline int so_send(socket_t so, char *buf, size_t size, uint64_t flags)
 {
     return so_send_recv(so, buf, size, flags, true);
 }
 
-static inline int so_recv(socket_t so, void *buf, size_t size, uint64_t flags)
+static inline int so_recv(socket_t so, char *buf, size_t size, uint64_t flags)
 {
     return so_send_recv(so, buf, size, flags, false);
 }
@@ -140,13 +144,11 @@ static void uuid_string_generate(uuid_string_t out)
 
 #define ISO8601_TM_BUFSZ    20u
 
-#define EPOCH_YEAR_SECS     31556926u
-#define EPOCH_MONTH_SECS    2629743u
 #define EPOCH_DAY_SECS      86400u
 #define EPOCH_HOUR_SECS     3600u
 #define EPOCH_MINUTE_SECS   60u
 
-struct kern_tm {
+struct pseudo_tm {
     uint32_t year;
     uint32_t month;
     uint32_t day;
@@ -155,13 +157,29 @@ struct kern_tm {
     uint32_t sec;
 };
 
-/* XXX: buggy implementation */
+#define MONTH_PER_YEAR      12
+
+/* see: https://www.timeanddate.com/calendar/months/ */
+static const uint32_t days_of_month[][MONTH_PER_YEAR] = {
+    {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+    {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+};
+
+static inline int is_leap_year(uint64_t y)
+{
+    return !(y % 400) || (!(y & 3) && (y % 100));
+}
+
+#define EPOCH_YEAR          1970
+
 static void format_iso8601_time(char *buf, size_t sz)
 {
     int n;
     clock_sec_t t;
+    uint32_t i;
+    const uint32_t *p;
 
-    struct kern_tm tm;
+    struct pseudo_tm tm;
 
     kassert_nonnull(buf);
     kassertf(sz >= ISO8601_TM_BUFSZ,
@@ -170,28 +188,40 @@ static void format_iso8601_time(char *buf, size_t sz)
 
     t = time(NULL);
 
-    tm.year = (uint32_t) t / EPOCH_YEAR_SECS;
-    t -= tm.year * EPOCH_YEAR_SECS;
+    tm.sec = (uint32_t) t % EPOCH_MINUTE_SECS;
+    t -= tm.sec;
 
-    tm.month = (uint32_t) t / EPOCH_MONTH_SECS;
-    t -= tm.month * EPOCH_MONTH_SECS;
-
-    tm.day = (uint32_t) t / EPOCH_DAY_SECS;
-    t -= tm.day * EPOCH_DAY_SECS;
-
-    tm.hour = (uint32_t) t / EPOCH_HOUR_SECS;
-    t -= tm.hour * EPOCH_HOUR_SECS;
-
-    tm.minute = (uint32_t) t / EPOCH_MINUTE_SECS;
+    tm.minute = t % EPOCH_HOUR_SECS / EPOCH_MINUTE_SECS;
     t -= tm.minute * EPOCH_MINUTE_SECS;
 
-    tm.sec = (uint32_t) t;
-    kassertf(tm.sec < EPOCH_MINUTE_SECS,
-                "Why tm.sec %u >= %u?!", tm.sec, EPOCH_MINUTE_SECS);
+    tm.hour = t % EPOCH_DAY_SECS / EPOCH_HOUR_SECS;
+    t -= tm.hour * EPOCH_HOUR_SECS;
+
+    kassertf(t % 86400 == 0, "t = %lu", t);
+    t /= 86400;     /* Days left */
+
+    i = 0;
+    while (t >= 365) {
+        t -= 365;
+        if (t > 0 && is_leap_year(EPOCH_YEAR + i)) t--;
+        kassertf(t >= 0, "t = %lu", t);
+        i++;
+    }
+
+    p = days_of_month[is_leap_year(EPOCH_YEAR + i)];
+    tm.year = i;
+    for (i = 0; i < ARRAY_SIZE(*days_of_month); i++) {
+        if (t <= p[i]) break;
+        t -= p[i];
+    }
+    kassertf(t <= 31, "t = %lu", t);
+
+    tm.month = i;
+    tm.day = (uint32_t) t;
 
     n = snprintf(buf, sz, "%04u-%02u-%02uT%02u:%02u:%02u",
-            tm.year + 1970, tm.month + 1, tm.day + 1,
-            tm.hour, tm.minute, tm.sec);
+                    tm.year + EPOCH_YEAR, tm.month + 1, tm.day + 1,
+                    tm.hour, tm.minute, tm.sec);
     kassertf(n >= 0, "snprintf() fail  n: %d", n);
 }
 
