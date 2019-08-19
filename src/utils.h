@@ -82,5 +82,12 @@
 
 #define kassert_nonnull(ptr)    kassert(ptr != NULL)
 
+uint64_t utime(uint64_t * __nullable);
+
+#ifndef USEC_PER_MSEC
+#define USEC_PER_MSEC       1000ULL      /* microseconds per milliseconds */
+#endif
+int usleep(uint64_t);
+
 #endif /* SENTRY_XNU_UTILS_H */
 

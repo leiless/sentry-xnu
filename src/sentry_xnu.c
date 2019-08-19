@@ -11,6 +11,7 @@
 
 #include <sys/socket.h>     /* PF_INET */
 #include <netinet/in.h>     /* IPPROTO_IP */
+#include <sys/filio.h>      /* FIONBIO */
 
 #include "utils.h"
 
@@ -280,22 +281,31 @@ static void sentry_capture_message(socket_t so, const char *msg)
 
     LOG_DBG("POST size: %zu\n%s", strlen(buf), buf);
 
+    uint64_t t = utime(NULL);
     LOG_DBG("Sending..");
     e = so_send(so, buf, strlen(buf), MSG_WAITALL);
     if (e != 0) {
         LOG_ERR("so_send() fail  errno: %d", e);
         return;
     }
+    LOG_DBG("Sent.. %llu us", utime(NULL) - t);
 
     LOG_DBG("Receiving..");
     (void) snprintf(buf, BUFSZ, "<no data>");
     e = so_recv(so, buf, BUFSZ, 0);
     if (e != 0) {
         LOG_ERR("so_recv() fail  errno: %d", e);
-        return;
+        //return;
+        goto out_exit;
     }
 
     LOG("Response size: %zu\n%s", strlen(buf), buf);
+
+out_exit:
+    t = utime(NULL);
+    e = usleep(5 * USEC_PER_MSEC);
+    if (e != 0) LOG_ERR("usleep() errno: %d", e);
+    LOG_DBG("us elapsed: %llu",  utime(NULL) - t);
 }
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
@@ -339,6 +349,14 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     e = sock_connect(so, (struct sockaddr *) &sin, 0);
     if (e != 0) {
         LOG_ERR("sock_connect() fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    int arg = 1;
+    e = sock_ioctl(so, FIONBIO, &arg);
+    if (e != 0) {
+        LOG_ERR("sock_ioctl() FIONBIO fail  errno: %d", e);
         e = KERN_FAILURE;
         goto out_close;
     }
