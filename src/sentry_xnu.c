@@ -70,7 +70,7 @@ static int so_send_recv(
 
         e = sock_op(so, &msg, (int) flags, &i);
         if (e != 0 || i == 0) {
-            if (e == 0) e = -ESHUTDOWN; /* Distinguish return value */
+            if (e == 0) e = -EAGAIN; /* Distinguish return value */
             break;
         }
 
@@ -82,7 +82,7 @@ static int so_send_recv(
         buf[n] = '\0';
     }
 
-    LOG_DBG("%s size: %zu", send ? "send" : "recv", n);
+    LOG_DBG("so_send_recv() %s size: %zu", send ? "send" : "recv", n);
 
     return e;
 }
@@ -295,7 +295,7 @@ static void sentry_capture_message(socket_t so, const char *msg)
     e = so_recv(so, buf, BUFSZ, 0);
     if (e != 0) {
         LOG_ERR("so_recv() fail  errno: %d", e);
-        //return;
+        /* return; */
         goto out_exit;
     }
 
@@ -304,8 +304,56 @@ static void sentry_capture_message(socket_t so, const char *msg)
 out_exit:
     t = utime(NULL);
     e = usleep(5 * USEC_PER_MSEC);
-    if (e != 0) LOG_ERR("usleep() errno: %d", e);
-    LOG_DBG("us elapsed: %llu",  utime(NULL) - t);
+    LOG_DBG("usleep()  utime: %llu errno: %d",  utime(NULL) - t, e);
+}
+
+/**
+ * Socket upcall function will be called:
+ *  when there is data more than the low water mark for reading,
+ *  or when there is space for a write,
+ *  or when there is a connection to accept,
+ *  or when a socket is connected,
+ *  or when a socket is closed or disconnected
+ *
+ * @param so        A reference to the socket that's ready.
+ * @param cookie    The cookie passed in when the socket was created.
+ * @param waitf     Indicates whether or not it's safe to block.
+ */
+static void so_upcall(socket_t so, void *cookie, int waitf)
+{
+    int e;
+    int optval;
+    int optlen;
+    char buf[BUFSZ];
+
+    LOG_DBG("so_upcall() called  waitf: %d", waitf);
+
+    kassert_nonnull(so);
+    kassert(cookie == NULL);
+
+    if (!sock_isconnected(so)) {
+        LOG_DBG("socket isn't connected");
+        return;
+    }
+
+    optlen = sizeof(optval);
+    e = sock_getsockopt(so, SOL_SOCKET, SO_NREAD, &optval, &optlen);
+    if (e != 0) {
+        LOG_ERR("sock_getsockopt() SO_NREAD fail  errno: %d", e);
+    } else {
+        kassertf(optlen == sizeof(optval),
+            "sock_getsockopt() SO_NREAD optlen = %d?", optlen);
+
+        LOG_DBG("SO_NREAD: %d", optval);
+    }
+
+    /* We should read only when SO_NREAD return a positive value */
+    e = so_recv(so, buf, BUFSZ, 0);
+    if (e != 0) {
+        LOG_ERR("so_recv() fail  errno: %d", e);
+    } else {
+        LOG("Response (size: %zu)\n%s", strlen(buf), buf);
+    }
 }
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
@@ -322,7 +370,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
 
-    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, NULL, NULL, &so);
+    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, NULL, &so);
     if (e != 0) {
         LOG_ERR("sock_socket() fail  errno: %d", e);
         e = KERN_FAILURE;
@@ -364,6 +412,13 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     LOG("Endpoint " SENTRY_IP "  connected: %d nonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
 
+    e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_UPCALLCLOSEWAIT fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_shutdown;
+    }
+
     tv.tv_sec = 5;
     tv.tv_usec = 0;
 
@@ -384,6 +439,10 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     char buf[128];
     (void) snprintf(buf, sizeof(buf), "hello world! %#x", random());
     sentry_capture_message(so, buf);
+
+    /* Sleep some time  let the upcall got notified */
+    LOG_DBG("sleep some time..");
+    (void) usleep(3 * USEC_PER_SEC);
 
 out_shutdown:
     e2 = sock_shutdown(so, SHUT_RDWR);
