@@ -264,6 +264,7 @@ static void sentry_capture_message(socket_t so, const char *msg)
     char buf[BUFSZ];
     char auth[AUTHSZ];
     char payload[PAYLOADSZ];
+    uint64_t t;
 
     kassert_nonnull(so);
     kassert_nonnull(msg);
@@ -281,7 +282,7 @@ static void sentry_capture_message(socket_t so, const char *msg)
 
     LOG_DBG("POST size: %zu\n%s", strlen(buf), buf);
 
-    uint64_t t = utime(NULL);
+    t = utime(NULL);
     LOG_DBG("Sending..");
     e = so_send(so, buf, strlen(buf), MSG_WAITALL);
     if (e != 0) {
@@ -295,16 +296,10 @@ static void sentry_capture_message(socket_t so, const char *msg)
     e = so_recv(so, buf, BUFSZ, 0);
     if (e != 0) {
         LOG_ERR("so_recv() fail  errno: %d", e);
-        /* return; */
-        goto out_exit;
+        return;
     }
 
     LOG("Response size: %zu\n%s", strlen(buf), buf);
-
-out_exit:
-    t = utime(NULL);
-    e = usleep(5 * USEC_PER_MSEC);
-    LOG_DBG("usleep()  utime: %llu errno: %d",  utime(NULL) - t, e);
 }
 
 /**
@@ -322,8 +317,7 @@ out_exit:
 static void so_upcall(socket_t so, void *cookie, int waitf)
 {
     int e;
-    int optval;
-    int optlen;
+    int optval, optlen;
     char buf[BUFSZ];
 
     LOG_DBG("so_upcall() called  waitf: %d", waitf);
@@ -332,7 +326,7 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     kassert(cookie == NULL);
 
     if (!sock_isconnected(so)) {
-        LOG_DBG("socket isn't connected");
+        LOG_DBG("socket closed or disconnected");
         return;
     }
 
@@ -437,16 +431,22 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     }
 
     char buf[128];
-    (void) snprintf(buf, sizeof(buf), "hello world! %#x", random());
+    (void) snprintf(buf, sizeof(buf), "hello world! %u", random() % 100000);
+    sentry_capture_message(so, buf);
+
+    (void) snprintf(buf, sizeof(buf), "hello world! %u", random() % 100000);
     sentry_capture_message(so, buf);
 
     /* Sleep some time  let the upcall got notified */
-    LOG_DBG("sleep some time..");
-    (void) usleep(3 * USEC_PER_SEC);
+    (void) usleep(1000 * USEC_PER_MSEC);
 
 out_shutdown:
     e2 = sock_shutdown(so, SHUT_RDWR);
-    if (e2 != 0) LOG_ERR("sock_shutdown() RDWR fail  errno: %d", e2);
+    if (e2 != 0) {
+        LOG_ERR("sock_shutdown() RDWR fail  errno: %d", e2);
+    } else {
+        LOG_DBG("socket %p RDWR shuted down", so);
+    }
 out_close:
     sock_close(so);
 out_exit:
