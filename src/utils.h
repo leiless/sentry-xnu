@@ -53,9 +53,11 @@
 #define LOG_DBG(fmt, ...)    LOG_OFF(fmt, ##__VA_ARGS__)
 #endif
 
-#define panicf(fmt, ...)                \
-    panic("\n" fmt "\n%s@%s#L%d\n\n",   \
-            ##__VA_ARGS__, __BASE_FILE__, __FUNCTION__, __LINE__)
+#define panicf(fmt, ...) ({                                     \
+    panic("\n" fmt "\n%s@%s#L%d\n\n",                           \
+        ##__VA_ARGS__, __BASE_FILE__, __FUNCTION__, __LINE__);  \
+    __builtin_unreachable();                                    \
+})
 
 #ifdef DEBUG
 /*
@@ -82,12 +84,23 @@
 
 #define kassert_nonnull(ptr)    kassert(ptr != NULL)
 
+/**
+ * Branch predictions
+ * see: linux/include/linux/compiler.h
+ */
+#define likely(x)               __builtin_expect(!(x), 0)
+#define unlikely(x)             __builtin_expect(!(x), 1)
+
 uint64_t utime(uint64_t * __nullable);
 
 #ifndef USEC_PER_MSEC
 #define USEC_PER_MSEC       1000ULL      /* microseconds per milliseconds */
 #endif
 int usleep(uint64_t);
+
+void * __nullable util_malloc(size_t, int);
+void util_mfree(void * __nullable);
+void util_massert(void);
 
 #endif /* SENTRY_XNU_UTILS_H */
 

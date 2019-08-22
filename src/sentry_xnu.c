@@ -26,6 +26,7 @@
  * TODO: implement a in-kernel gethostbyname()
  */
 #define SENTRY_IP           "35.188.42.15"
+#define SENTRY_PORT         80
 
 #define SENTRY_XNU_NAME     "sentry-udev"
 #define SENTRY_XNU_VER      "0.1"
@@ -365,6 +366,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     ASSURE_TYPE_ALIAS(errno_t, int);
     ASSURE_TYPE_ALIAS(kern_return_t, int);
+    ASSURE_TYPE_ALIAS(sin.sin_addr.s_addr, uint32_t);
+    ASSURE_TYPE_ALIAS(sin.sin_port, uint16_t);
 
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
 
@@ -388,9 +391,10 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
      */
     sin.sin_len = sizeof(sin);
     sin.sin_family = PF_INET;
-    sin.sin_port = htons(80);
+    sin.sin_port = htons(SENTRY_PORT);
     e = inet_aton(SENTRY_IP, &sin.sin_addr);
     kassertf(e == 1, "inet_aton() fail  endpoint: " SENTRY_IP);
+    LOG_DBG("sin.sin_addr: %#010x", ntohl(sin.sin_addr.s_addr));
 
     e = sock_connect(so, (struct sockaddr *) &sin, 0);
     if (e != 0) {

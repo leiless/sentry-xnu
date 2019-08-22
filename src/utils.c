@@ -2,9 +2,12 @@
  * Created 190815 lynnl
  */
 
+#include <sys/types.h>
 #include <sys/time.h>
-#include <kern/clock.h>
+#include <sys/malloc.h>
 #include <sys/proc.h>
+#include <kern/clock.h>
+#include <libkern/OSAtomic.h>
 
 #include "utils.h"
 
@@ -39,5 +42,45 @@ int usleep(uint64_t t)
      * thus we used an external invisible pseudo-channel
      */
     return msleep(&ts, NULL, PPAUSE, NULL, &ts);
+}
+
+static void util_mstat(int opt)
+{
+    static volatile SInt64 cnt = 0;
+    switch (opt) {
+    case 0:
+        if (OSDecrementAtomic64(&cnt) > 0) return;
+        break;
+    case 1:
+        if (OSIncrementAtomic64(&cnt) >= 0) return;
+        break;
+    case 2:
+        if (cnt == 0) return;
+        /* Fall through */
+    default:
+        break;
+    }
+    panicf("FIXME: potential memleak  opt: %d cnt: %lld", opt, cnt);
+}
+
+/* Zero size allocation will return a NULL */
+void * __nullable util_malloc(size_t size, int flags)
+{
+    /* _MALLOC `type' parameter is a joke */
+    void *addr = _MALLOC(size, M_TEMP, flags);
+    if (likely(addr != NULL)) util_mstat(1);
+    return addr;
+}
+
+void util_mfree(void * __nullable addr)
+{
+    if (addr != NULL) util_mstat(0);
+    _FREE(addr, M_TEMP);
+}
+
+/* XXX: call when all memory freed */
+void util_massert(void)
+{
+    util_mstat(2);
 }
 
