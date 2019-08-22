@@ -326,7 +326,11 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     kassert(cookie == NULL);
 
     if (!sock_isconnected(so)) {
-        LOG_DBG("socket closed or disconnected");
+        optval = 0;
+        optlen = sizeof(optval);
+        /* sock_getsockopt() SO_ERROR should always success */
+        (void) sock_getsockopt(so, SOL_SOCKET, SO_ERROR, &optval, &optlen);
+        LOG_DBG("socket closed or disconnected  errno: %d", optval);
         return;
     }
 
@@ -403,7 +407,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_close;
     }
 
-    LOG("Endpoint " SENTRY_IP "  connected: %d nonblocking: %d",
+    LOG("Endpoint " SENTRY_IP "  isconnected: %d isnonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
 
     e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
@@ -447,6 +451,7 @@ out_shutdown:
     } else {
         LOG_DBG("socket %p RDWR shuted down", so);
     }
+    /* sock_shutdown() won't reset socket's SS_ISCONNECTED flag? */
 out_close:
     sock_close(so);
 out_exit:
