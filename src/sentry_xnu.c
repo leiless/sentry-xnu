@@ -15,12 +15,6 @@
 
 #include "utils.h"
 
-/**
- * Make sure type of two variables are compatible to each other
- */
-#define ASSURE_TYPE_ALIAS(a, b) \
-    BUILD_BUG_ON(!__builtin_types_compatible_p(__typeof__(a), __typeof__(b)))
-
 /*
  * DNS A-record of sentry.io
  * TODO: implement a in-kernel gethostbyname()

@@ -84,3 +84,26 @@ void util_massert(void)
     util_mstat(2);
 }
 
+static inline char tolower(char c)
+{
+    return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+}
+
+/**
+ * striprefix(s, "") return true
+ */
+bool striprefix(const char *s1, const char *s2)
+{
+    char c;
+
+    kassert_nonnull(s1);
+    kassert_nonnull(s2);
+
+    while ((c = *s2++) != '\0') {
+        if (tolower(c) != tolower(*s1++))
+            return false;
+    }
+
+    return true;
+}
+

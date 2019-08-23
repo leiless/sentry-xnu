@@ -20,6 +20,12 @@
 #define ARRAY_SIZE(a)       (sizeof(a) / sizeof(*a))
 
 /**
+ * Should only used for `char[]'  NOT `char *'
+ * Assume ends with null byte('\0')
+ */
+#define STRLEN(s)           (sizeof(s) - 1)
+
+/**
  * Compile-time assurance  see: linux/arch/x86/boot/boot.h
  * Will fail build if condition yield true
  */
@@ -28,6 +34,12 @@
 #else
 #define BUILD_BUG_ON(cond)      UNUSED(cond)
 #endif
+
+/**
+ * Make sure type of two variables are compatible to each other
+ */
+#define ASSURE_TYPE_ALIAS(a, b) \
+    BUILD_BUG_ON(!__builtin_types_compatible_p(__typeof__(a), __typeof__(b)))
 
 /**
  * os_log() is only available on macOS 10.12 or newer
@@ -101,6 +113,8 @@ int usleep(uint64_t);
 void * __nullable util_malloc(size_t, int);
 void util_mfree(void * __nullable);
 void util_massert(void);
+
+bool striprefix(const char * __nonnull, const char * __nonnull);
 
 #endif /* SENTRY_XNU_UTILS_H */
 
