@@ -446,7 +446,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     sentry_capture_message(so, buf);
 
     /* Sleep some time  let the upcall got notified */
-    (void) usleep(1000 * USEC_PER_MSEC);
+    (void) usleep(1500 * USEC_PER_MSEC);
 
 out_shutdown:
     e2 = sock_shutdown(so, SHUT_RDWR);

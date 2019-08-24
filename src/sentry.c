@@ -45,7 +45,7 @@ static void sentry_handle_debug(const sentry_t *handle)
 
     uuid_unparse_lower(handle->last_event_id, u);
 
-    LOG_DBG("Sentry handle %p> "
+    LOG_DBG("Sentry handle %p: "
             "ip: %#010x port: %u pubkey: %s "
             "projid: %llu sample_rate: %u "
             "lck_grp: %p lck_rw: %p "
@@ -166,7 +166,7 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
  *
  * @param handlep       [OUT] pointer to the Sentry handle
  * @param dsn           The client key
- * @param sample_rate   (literal)
+ * @param sample_rate   Sample rate [0, 100]
  * @return              0 if success, errno otherwise
  */
 int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
