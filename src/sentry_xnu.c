@@ -424,10 +424,12 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     kassertf(e == 1, "inet_aton() fail  endpoint: " SENTRY_IP);
     LOG_DBG("sin.sin_addr: %#010x", ntohl(sin.sin_addr.s_addr));
 
-#if 1
+#if 0
     (void) sock_connect(so, (struct sockaddr *) &sin, MSG_DONTWAIT);
 #else
+    uint64_t t = utime(NULL);
     e = sock_connect(so, (struct sockaddr *) &sin, 0);
+    LOG_DBG("connect time elapsed: %llu us", utime(NULL) - t);
     if (e != 0) {
         LOG_ERR("sock_connect() fail  errno: %d", e);
         e = KERN_FAILURE;
