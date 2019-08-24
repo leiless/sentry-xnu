@@ -14,6 +14,7 @@
 #include <sys/filio.h>      /* FIONBIO */
 
 #include "utils.h"
+#include "sentry.h"
 
 /*
  * DNS A-record of sentry.io
@@ -364,6 +365,11 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     ASSURE_TYPE_ALIAS(sin.sin_port, uint16_t);
 
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
+
+    void *handle;
+    e = sentry_new(&handle,
+            "HTTP://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302", 50);
+    if (e != 0) LOG_ERR("sentry_new() fail  errno: %d", e);
 
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, NULL, &so);
     if (e != 0) {
