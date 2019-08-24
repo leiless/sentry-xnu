@@ -69,7 +69,7 @@ static bool parse_ip(sentry_t *handle, const char *host, size_t n)
     kassert_nonnull(host);
 
     if (n < 7 || n > 15) return false;
-    (void) strlcpy(buf, host, n);
+    (void) strlcpy(buf, host, n + 1);
 
     return inet_aton(buf, &handle->ip);
 }
@@ -84,7 +84,7 @@ static bool parse_u16(const char *str, size_t n, uint16_t *out)
     kassert_nonnull(out);
 
     if (n == 0 || n >= sizeof(buf)) return false;
-    (void) strlcpy(buf, str, n);
+    (void) strlcpy(buf, str, n + 1);
     ul = strtoul(buf, &p, 10);
 
     kassert_nonnull(p);
@@ -107,7 +107,7 @@ static bool parse_u64(const char *str, size_t n, uint64_t *out)
     kassert_nonnull(out);
 
     if (n == 0 || n >= sizeof(buf)) return false;
-    (void) strlcpy(buf, str, n);
+    (void) strlcpy(buf, str, n + 1);
     u64 = strtouq(buf, &p, 10);
 
     kassert_nonnull(p);
@@ -117,6 +117,10 @@ static bool parse_u64(const char *str, size_t n, uint64_t *out)
     return true;
 }
 
+/**
+ * DSN(Client key) format:
+ *  SCHEME://PUBKEY@HOST[:PORT]/PROJECT_ID
+ */
 static bool parse_dsn(sentry_t *handle, const char *dsn)
 {
     char *p1, *p2;
@@ -129,9 +133,9 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
     dsn += STRLEN("http://");   /* PUBKEY@HOST[:PORT]/PROJECT_ID */
 
     p1 = strchr(dsn, '@');
-    if (p1 == NULL || p1 - dsn != UUID_BUFSZ_COMPACT) return false;
+    if (p1 == NULL || p1 - dsn != UUID_BUFSZ_COMPACT - 1) return false;
 
-    (void) strncpy(handle->pubkey, dsn, UUID_BUFSZ_COMPACT);
+    (void) strlcpy(handle->pubkey, dsn, UUID_BUFSZ_COMPACT);
     dsn = p1 + 1;               /* HOST[:PORT]/PROJECT_ID */
 
     p1 = strchr(dsn, ':');
