@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <kern/clock.h>
 
+#include <libkern/OSAtomic.h>
+
 #include <sys/socket.h>     /* PF_INET */
 #include <netinet/in.h>     /* IPPROTO_IP */
 #include <sys/filio.h>      /* FIONBIO */
@@ -298,6 +300,8 @@ static void sentry_capture_message(socket_t so, const char *msg)
     LOG("Response size: %zu\n%s", strlen(buf), buf);
 }
 
+static volatile UInt32 so_connected = 0;
+
 /**
  * Socket upcall function will be called:
  *  when there is data more than the low water mark for reading,
@@ -328,6 +332,25 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         (void) sock_getsockopt(so, SOL_SOCKET, SO_ERROR, &optval, &optlen);
         LOG_DBG("socket closed or disconnected  errno: %d", optval);
         return;
+    } else {
+        if (OSCompareAndSwap(0, 1, &so_connected)) {
+            LOG_DBG("socket %p is connected!", so);
+        }
+    }
+
+    optlen = sizeof(optval);
+    e = sock_getsockopt(so, SOL_SOCKET, SO_NWRITE, &optval, &optlen);
+    if (e != 0) {
+        LOG_ERR("sock_getsockopt() SO_NWRITE fail  errno: %d", e);
+    } else {
+        kassertf(optlen == sizeof(optval),
+            "sock_getsockopt() SO_NWRITE optlen = %d?", optlen);
+
+        if (optval == 0) {
+            LOG_DBG("SO_NWRITE = 0, nothing to write");
+        } else {
+            LOG_DBG("SO_NWRITE: %d", optval);
+        }
     }
 
     optlen = sizeof(optval);
@@ -337,6 +360,11 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     } else {
         kassertf(optlen == sizeof(optval),
             "sock_getsockopt() SO_NREAD optlen = %d?", optlen);
+
+        if (optval == 0) {
+            LOG_DBG("SO_NREAD = 0, nothing to read");
+            return;
+        }
 
         LOG_DBG("SO_NREAD: %d", optval);
     }
@@ -396,12 +424,16 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     kassertf(e == 1, "inet_aton() fail  endpoint: " SENTRY_IP);
     LOG_DBG("sin.sin_addr: %#010x", ntohl(sin.sin_addr.s_addr));
 
+#if 1
+    (void) sock_connect(so, (struct sockaddr *) &sin, MSG_DONTWAIT);
+#else
     e = sock_connect(so, (struct sockaddr *) &sin, 0);
     if (e != 0) {
         LOG_ERR("sock_connect() fail  errno: %d", e);
         e = KERN_FAILURE;
         goto out_close;
     }
+#endif
 
     int arg = 1;
     e = sock_ioctl(so, FIONBIO, &arg);
