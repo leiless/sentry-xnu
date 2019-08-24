@@ -399,6 +399,20 @@ static int so_set_tcp_no_delay(socket_t so, int on)
     return EINVAL;
 }
 
+/**
+ * Time-count socket connect
+ *
+ * @param so    The socket
+ * @param tv    Microsecond level time out
+ * @return      0 if successfully connected within the timeout
+ *              EINVAL if socket in bad state(SS_ISCONNECTING, SS_ISCONNECTED = 0)
+ *              EDOM if `tv' is bad
+ *              EINPROGRESS if still not connected within the timeout
+ *
+ * Usually called after MSG_DONTWAIT sock_connect()
+ */
+extern errno_t sock_connectwait(socket_t so, const struct timeval *tv);
+
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
@@ -445,12 +459,24 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     kassertf(e == 1, "inet_aton() fail  endpoint: " SENTRY_IP);
     LOG_DBG("sin.sin_addr: %#010x", ntohl(sin.sin_addr.s_addr));
 
-#if 0
-    (void) sock_connect(so, (struct sockaddr *) &sin, MSG_DONTWAIT);
-#else
     uint64_t t = utime(NULL);
+#if 1
+    e = sock_connect(so, (struct sockaddr *) &sin, MSG_DONTWAIT);
+    if (e && e != EINPROGRESS) {
+        LOG_ERR("sock_connect() MSG_DONTWAIT fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    tv.tv_sec = 3;
+    tv.tv_usec = 0;
+
+    e = sock_connectwait(so, &tv);
+    LOG_DBG("connectwait timed: %llu us", utime(NULL) - t);
+    if (e != 0) LOG_DBG("sock_connectwait() fail  errno: %d", e);
+#else
     e = sock_connect(so, (struct sockaddr *) &sin, 0);
-    LOG_DBG("connect time elapsed: %llu us", utime(NULL) - t);
+    LOG_DBG("connect timed: %llu us", utime(NULL) - t);
     if (e != 0) {
         LOG_ERR("sock_connect() fail  errno: %d", e);
         e = KERN_FAILURE;
@@ -468,8 +494,13 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_close;
     }
 
-    LOG("Endpoint " SENTRY_IP "  isconnected: %d isnonblocking: %d",
+    LOG("IP " SENTRY_IP "  isconnected: %d isnonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
+
+    if (!sock_isconnected(so)) {
+        e = KERN_FAILURE;
+        goto out_shutdown;
+    }
 
     arg = 1;
     /* [sic] Just playin' it safe with upcalls */
@@ -542,6 +573,7 @@ out_shutdown:
     /* sock_shutdown() won't reset socket's SS_ISCONNECTED flag? */
 out_close:
     sock_close(so);
+    LOG_DBG("socket %p closed", so);
 out_exit:
 #ifdef DEBUG
     return KERN_FAILURE;
