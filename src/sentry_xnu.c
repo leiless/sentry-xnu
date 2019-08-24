@@ -14,6 +14,7 @@
 #include <sys/socket.h>     /* PF_INET */
 #include <netinet/in.h>     /* IPPROTO_IP */
 #include <sys/filio.h>      /* FIONBIO */
+#include <netinet/tcp.h>    /* TCP_NODELAY */
 
 #include "utils.h"
 #include "sentry.h"
@@ -378,6 +379,26 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     }
 }
 
+static int so_set_tcp_no_delay(socket_t so, int on)
+{
+    int domain;
+    int type;
+    int proto;
+    int e;
+
+    kassert_nonnull(so);
+
+    e = sock_gettype(so, &domain, &type, &proto);
+    /* sock_gettype() should always success */
+    kassertf(e == 0, "sock_gettype() fail  errno: %d", e);
+
+    if (domain == PF_INET && type == SOCK_STREAM && proto == IPPROTO_TCP) {
+        return sock_setsockopt(so, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on));
+    }
+
+    return EINVAL;
+}
+
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
@@ -437,7 +458,9 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     }
 #endif
 
-    int arg = 1;
+    int arg;
+
+    arg = 1;
     e = sock_ioctl(so, FIONBIO, &arg);
     if (e != 0) {
         LOG_ERR("sock_ioctl() FIONBIO fail  errno: %d", e);
@@ -448,9 +471,29 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     LOG("Endpoint " SENTRY_IP "  isconnected: %d isnonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
 
+    arg = 1;
+    /* [sic] Just playin' it safe with upcalls */
     e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
     if (e != 0) {
         LOG_ERR("sock_setsockopt() SO_UPCALLCLOSEWAIT fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_shutdown;
+    }
+
+    arg = 1;
+    /* [sic] Assume that SOCK_STREAM always requires a connection */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_KEEPALIVE, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_KEEPALIVE fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_shutdown;
+    }
+
+    arg = 1;
+    /* [sic] Set SO_NOADDRERR to detect network changes ASAP */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_NOADDRERR, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_NOADDRERR fail  errno: %d", e);
         e = KERN_FAILURE;
         goto out_shutdown;
     }
@@ -468,6 +511,13 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     if (e != 0) {
         LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_shutdown;
+    }
+
+    e = so_set_tcp_no_delay(so, 1);
+    if (e != 0) {
+        LOG_ERR("so_set_tcp_no_delay() fail  errno: %d", e);
         e = KERN_FAILURE;
         goto out_shutdown;
     }
