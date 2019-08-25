@@ -280,17 +280,17 @@ int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
         goto out_exit;
     }
 
-    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, NULL, &h.so);
-    if (e != 0) {
+    *handlep = util_malloc(sizeof(h), M_NOWAIT);
+    if (*handlep == NULL) {
+        e = ENOMEM;
         lck_rw_free(h.lck_rw, h.lck_grp);
         lck_grp_free(h.lck_grp);
         goto out_exit;
     }
 
-    *handlep = util_malloc(sizeof(h), M_NOWAIT);
-    if (*handlep == NULL) {
-        e = ENOMEM;
-        util_sock_destroy(h.so);
+    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, *handlep, &h.so);
+    if (e != 0) {
+        util_mfree(*handlep);
         lck_rw_free(h.lck_rw, h.lck_grp);
         lck_grp_free(h.lck_grp);
         goto out_exit;
