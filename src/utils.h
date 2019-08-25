@@ -11,7 +11,6 @@
 #include <sys/time.h>
 #include <kern/clock.h>
 
-#include <sys/socket.h>
 #include <sys/malloc.h>
 #include <kern/debug.h>         /* panic() */
 
@@ -123,8 +122,6 @@ void util_mfree(void * __nullable);
 void util_massert(void);
 
 bool striprefix(const char * __nonnull, const char * __nonnull);
-
-void util_sock_destroy(socket_t __nullable);
 
 clock_sec_t time(clock_sec_t * __nullable);
 

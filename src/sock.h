@@ -19,12 +19,17 @@
  *
  * Usually called after MSG_DONTWAIT sock_connect()
  */
-extern errno_t sock_connectwait(socket_t so, const struct timeval *tv);
+extern errno_t sock_connectwait(
+    socket_t __nullable so,
+    const struct timeval * __nullable tv
+);
 
-int so_send(socket_t, char *, size_t, uint64_t);
-int so_recv(socket_t, char *, size_t, uint64_t);
+int so_send(socket_t __nonnull, char * __nullable, size_t, uint64_t);
+int so_recv(socket_t __nonnull, char * __nullable, size_t, uint64_t);
 
-int so_set_tcp_no_delay(socket_t, int);
+int so_set_tcp_no_delay(socket_t __nonnull, int);
+
+void so_destroy(socket_t __nullable);
 
 #endif /* SENTRY_XNU_SOCK_H */
 

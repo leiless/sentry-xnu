@@ -4,7 +4,6 @@
 
 #include <sys/time.h>
 #include <sys/proc.h>
-#include <sys/socket.h>
 
 #include <kern/clock.h>
 #include <libkern/OSAtomic.h>
@@ -105,17 +104,6 @@ bool striprefix(const char *s1, const char *s2)
     }
 
     return true;
-}
-
-/**
- * Shutdown and close a socket
- */
-void util_sock_destroy(socket_t __nullable so)
-{
-    if (so != NULL) {
-        sock_shutdown(so, SHUT_RDWR);
-        sock_close(so);
-    }
 }
 
 /**

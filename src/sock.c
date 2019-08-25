@@ -96,3 +96,14 @@ int so_set_tcp_no_delay(socket_t so, int on)
     return EINVAL;
 }
 
+/**
+ * Shutdown and close a socket
+ */
+void so_destroy(socket_t __nullable so)
+{
+    if (so != NULL) {
+        sock_shutdown(so, SHUT_RDWR);
+        sock_close(so);
+    }
+}
+
