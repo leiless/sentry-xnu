@@ -432,7 +432,11 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     void *handle;
     e = sentry_new(&handle,
             "HTTP://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302", 50);
-    if (e != 0) LOG_ERR("sentry_new() fail  errno: %d", e);
+    if (e != 0) {
+        LOG_ERR("sentry_new() fail  errno: %d", e);
+    } else {
+        sentry_destroy(handle);
+    }
 
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, NULL, &so);
     if (e != 0) {

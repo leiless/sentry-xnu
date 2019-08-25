@@ -27,9 +27,12 @@ typedef struct {
     uint64_t projid;
     uint8_t sample_rate;    /* Range: [0, 100] */
 
+    uuid_t last_event_id;
+
     lck_grp_t *lck_grp;
     lck_rw_t *lck_rw;
-    uuid_t last_event_id;
+
+    socket_t so;
 
 #if 0
     thread_t thread;
@@ -48,13 +51,15 @@ static void sentry_handle_debug(const sentry_t *handle)
     LOG_DBG("Sentry handle %p: "
             "ip: %#010x port: %u pubkey: %s "
             "projid: %llu sample_rate: %u "
+            "last_event_id: %s "
             "lck_grp: %p lck_rw: %p "
-            "last_event_id: %s",
+            "socket: %p",
         handle,
         ntohl(handle->ip.s_addr), handle->port,
         handle->pubkey, handle->projid,
         handle->sample_rate,
-        handle->lck_grp, handle->lck_rw, u);
+        u, handle->lck_grp, handle->lck_rw,
+        handle->so);
 }
 
 #define HTTP_PORT       80
@@ -172,23 +177,71 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
 int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
 {
     int e = 0;
-    sentry_t handle = {};
+    sentry_t h;
 
     if (handlep == NULL || dsn == NULL || sample_rate > 100) {
         e = EINVAL;
         goto out_exit;
     }
 
-    if (!parse_dsn(&handle, dsn)) {
-        e = EPROTONOSUPPORT;
+    *handlep = NULL;
+    bzero(&h, sizeof(h));
+
+    if (!parse_dsn(&h, dsn)) {
+        e = EDOM;
         goto out_exit;
     }
 
-    handle.sample_rate = sample_rate;
+    h.sample_rate = sample_rate;
 
-    sentry_handle_debug(&handle);
+    /* lck_grp_name is a dummy placeholder */
+    h.lck_grp = lck_grp_alloc_init("", LCK_GRP_ATTR_NULL);
+    if (h.lck_grp == NULL) {
+        e = ENOMEM;
+        goto out_exit;
+    }
+
+    h.lck_rw = lck_rw_alloc_init(h.lck_grp, LCK_ATTR_NULL);
+    if (h.lck_rw == NULL) {
+        e = ENOMEM;
+        lck_grp_free(h.lck_grp);
+        goto out_exit;
+    }
+
+    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, NULL, NULL, &h.so);
+    if (e != 0) {
+        lck_rw_free(h.lck_rw, h.lck_grp);
+        lck_grp_free(h.lck_grp);
+        goto out_exit;
+    }
+
+    *handlep = util_malloc(sizeof(h), M_NOWAIT);
+    if (*handlep == NULL) {
+        e = ENOMEM;
+        util_sock_destroy(h.so);
+        lck_rw_free(h.lck_rw, h.lck_grp);
+        lck_grp_free(h.lck_grp);
+        goto out_exit;
+    }
+
+    (void) memcpy(*handlep, &h, sizeof(h));
+
+    sentry_handle_debug(*handlep);
 
 out_exit:
     return e;
+}
+
+void sentry_destroy(void *handle)
+{
+    sentry_t *h = (sentry_t *) handle;
+    if (h != NULL) {
+        util_sock_destroy(h->so);
+
+        lck_rw_free(h->lck_rw, h->lck_grp);
+        lck_grp_free(h->lck_grp);
+
+        util_mfree(h);
+    }
 }
 

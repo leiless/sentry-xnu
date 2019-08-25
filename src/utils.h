@@ -5,7 +5,9 @@
 #ifndef SENTRY_XNU_UTILS_H
 #define SENTRY_XNU_UTILS_H
 
-#include <kern/debug.h>     /* panic() */
+#include <sys/malloc.h>
+#include <kern/debug.h>         /* panic() */
+#include <libkern/libkern.h>
 
 #ifndef __kext_makefile__
 #define KEXTNAME_S          "sentry-xnu"
@@ -100,8 +102,8 @@
  * Branch predictions
  * see: linux/include/linux/compiler.h
  */
-#define likely(x)               __builtin_expect(!(x), 0)
-#define unlikely(x)             __builtin_expect(!(x), 1)
+#define likely(x)               __builtin_expect(!!(x), 1)
+#define unlikely(x)             __builtin_expect(!!(x), 0)
 
 uint64_t utime(uint64_t * __nullable);
 
@@ -115,6 +117,8 @@ void util_mfree(void * __nullable);
 void util_massert(void);
 
 bool striprefix(const char * __nonnull, const char * __nonnull);
+
+void util_sock_destroy(socket_t __nullable);
 
 #endif /* SENTRY_XNU_UTILS_H */
 
