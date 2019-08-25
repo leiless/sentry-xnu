@@ -4,6 +4,9 @@
 
 #include <sys/errno.h>
 
+#include <netinet/in.h>     /* IPPROTO_IP */
+#include <netinet/tcp.h>    /* TCP_NODELAY */
+
 #include "utils.h"
 #include "sock.h"
 
@@ -72,3 +75,24 @@ int so_recv(socket_t so, char *buf, size_t size, uint64_t flags)
 {
     return so_send_recv(so, buf, size, flags, false);
 }
+
+int so_set_tcp_no_delay(socket_t so, int on)
+{
+    int domain;
+    int type;
+    int proto;
+    int e;
+
+    kassert_nonnull(so);
+
+    e = sock_gettype(so, &domain, &type, &proto);
+    /* sock_gettype() should always success */
+    kassertf(e == 0, "sock_gettype() fail  errno: %d", e);
+
+    if (domain == PF_INET && type == SOCK_STREAM && proto == IPPROTO_TCP) {
+        return sock_setsockopt(so, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on));
+    }
+
+    return EINVAL;
+}
+

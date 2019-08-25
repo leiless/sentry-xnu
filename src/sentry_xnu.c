@@ -6,8 +6,6 @@
 #include <libkern/libkern.h>
 
 #include <sys/errno.h>
-#include <sys/time.h>
-#include <kern/clock.h>
 
 #include <libkern/OSAtomic.h>
 
@@ -32,21 +30,6 @@
 #define SENTRY_UA           SENTRY_XNU_NAME "/" SENTRY_XNU_VER
 
 /**
- * Get unix time stamp in seconds
- * see:
- *  Miscellaneous Kernel Services - Apple Developer
- *  https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/KernelProgramming/services/services.html
- */
-static clock_sec_t time(clock_sec_t * __nullable p)
-{
-    clock_sec_t s;
-    clock_usec_t __unused u;
-    clock_get_calendar_microtime(&s, &u);
-    if (p != NULL) *p = s;
-    return s;
-}
-
-/**
  * NOET: sentry_client not enclose, use User-Agent header instead
  * see: https://docs.sentry.io/development/sdk-dev/overview/#authentication
  */
@@ -67,14 +50,6 @@ static void format_x_sentry_auth(
             "sentry_timestamp=%lu, "
             "sentry_key=%s", ver, time(NULL), key);
     kassertf(n >= 0, "snprintf() fail  n: %d", n);
-}
-
-static void uuid_string_generate(uuid_string_t out)
-{
-    uuid_t u;
-    kassert_nonnull(out);
-    uuid_generate_random(u);
-    uuid_unparse_lower(u, out);
 }
 
 #define ISO8601_TM_BUFSZ    20u
@@ -313,40 +288,6 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         LOG("Response (size: %zu)\n%s", strlen(buf), buf);
     }
 }
-
-static int so_set_tcp_no_delay(socket_t so, int on)
-{
-    int domain;
-    int type;
-    int proto;
-    int e;
-
-    kassert_nonnull(so);
-
-    e = sock_gettype(so, &domain, &type, &proto);
-    /* sock_gettype() should always success */
-    kassertf(e == 0, "sock_gettype() fail  errno: %d", e);
-
-    if (domain == PF_INET && type == SOCK_STREAM && proto == IPPROTO_TCP) {
-        return sock_setsockopt(so, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on));
-    }
-
-    return EINVAL;
-}
-
-/**
- * Time-count socket connect
- *
- * @param so    The socket
- * @param tv    Microsecond level time out
- * @return      0 if successfully connected within the timeout
- *              EINVAL if socket in bad state(SS_ISCONNECTING, SS_ISCONNECTED = 0)
- *              EDOM if `tv' is bad
- *              EINPROGRESS if still not connected within the timeout
- *
- * Usually called after MSG_DONTWAIT sock_connect()
- */
-extern errno_t sock_connectwait(socket_t so, const struct timeval *tv);
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {

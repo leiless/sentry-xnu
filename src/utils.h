@@ -8,6 +8,9 @@
 #include <sys/types.h>
 #include <libkern/libkern.h>
 
+#include <sys/time.h>
+#include <kern/clock.h>
+
 #include <sys/socket.h>
 #include <sys/malloc.h>
 #include <kern/debug.h>         /* panic() */
@@ -122,6 +125,10 @@ void util_massert(void);
 bool striprefix(const char * __nonnull, const char * __nonnull);
 
 void util_sock_destroy(socket_t __nullable);
+
+clock_sec_t time(clock_sec_t * __nullable);
+
+void uuid_string_generate(uuid_string_t __nonnull);
 
 #endif /* SENTRY_XNU_UTILS_H */
 

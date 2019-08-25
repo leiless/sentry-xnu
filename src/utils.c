@@ -118,3 +118,26 @@ void util_sock_destroy(socket_t __nullable so)
     }
 }
 
+/**
+ * Get unix time stamp in seconds
+ * see:
+ *  Miscellaneous Kernel Services - Apple Developer
+ *  https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/KernelProgramming/services/services.html
+ */
+clock_sec_t time(clock_sec_t * __nullable p)
+{
+    clock_sec_t s;
+    clock_usec_t __unused u;
+    clock_get_calendar_microtime(&s, &u);
+    if (p != NULL) *p = s;
+    return s;
+}
+
+void uuid_string_generate(uuid_string_t out)
+{
+    uuid_t u;
+    kassert_nonnull(out);
+    uuid_generate_random(u);
+    uuid_unparse_lower(u, out);
+}
+
