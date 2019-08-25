@@ -2,9 +2,7 @@
  * Created 190815 lynnl
  */
 
-#include <sys/types.h>
 #include <sys/time.h>
-#include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/socket.h>
 

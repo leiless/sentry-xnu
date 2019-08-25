@@ -6,12 +6,14 @@
 
 #include <sys/errno.h>
 #include <libkern/libkern.h>
+#include <libkern/OSAtomic.h>
 #include <uuid/uuid.h>
 #include <kern/locks.h>
 #include <netinet/in.h>
 
 #include "sentry.h"
 #include "utils.h"
+#include "sock.h"
 
 #define UUID_BUFSZ              sizeof(uuid_string_t)
 /* UUID string buffer size without hyphens */
@@ -33,6 +35,7 @@ typedef struct {
     lck_rw_t *lck_rw;
 
     socket_t so;
+    volatile UInt32 connected;
 
 #if 0
     thread_t thread;
@@ -162,6 +165,75 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
     return true;
 }
 
+#define BUFSZ           2048
+
+/**
+ * Socket upcall function will be called:
+ *  when there is data more than the low water mark for reading,
+ *  or when there is space for a write,
+ *  or when there is a connection to accept,
+ *  or when a socket is connected,
+ *  or when a socket is closed or disconnected
+ *
+ * @param so        A reference to the socket that's ready.
+ * @param cookie    The cookie passed in when the socket was created.
+ * @param waitf     Indicates whether or not it's safe to block.
+ */
+static void so_upcall(socket_t so, void *cookie, int waitf)
+{
+    int e;
+    int optval, optlen;
+    char buf[BUFSZ];
+    sentry_t *handle;
+
+    kassert_nonnull(so);
+    kassert_nonnull(cookie);
+    UNUSED(waitf);
+
+    handle = (sentry_t *) cookie;
+    kassertf(so == handle->so, "Mismatch socket in upcall  %p vs %p",
+                                so, handle->so);
+
+    if (!sock_isconnected(so)) {
+        optval = 0;
+        optlen = sizeof(optval);
+        /* sock_getsockopt() SO_ERROR should always success */
+        e = sock_getsockopt(so, SOL_SOCKET, SO_ERROR, &optval, &optlen);
+        kassertf(e == 0, "sock_getsockopt() SO_ERROR fail  errno: %d", e);
+        LOG_ERR("socket not connected  errno: %d", optval);
+        return;
+    } else {
+        if (OSCompareAndSwap(0, 1, &handle->connected)) {
+            LOG_DBG("socket %p is connected!", so);
+            return;
+        }
+    }
+
+    optlen = sizeof(optval);
+    e = sock_getsockopt(so, SOL_SOCKET, SO_NREAD, &optval, &optlen);
+    if (e != 0) {
+        LOG_ERR("sock_getsockopt() SO_NREAD fail  errno: %d", e);
+    } else {
+        kassertf(optlen == sizeof(optval),
+            "sock_getsockopt() SO_NREAD optlen = %d?", optlen);
+
+        if (optval == 0) {
+            LOG_DBG("SO_NREAD = 0, nothing to read");
+            return;
+        }
+
+        LOG_DBG("SO_NREAD: %d", optval);
+    }
+
+    /* We should read only when SO_NREAD return a positive value */
+    e = so_recv(so, buf, BUFSZ, 0);
+    if (e != 0) {
+        LOG_ERR("so_recv() fail  errno: %d", e);
+    } else {
+        LOG("Response (size: %zu)\n%s", strlen(buf), buf);
+    }
+}
+
 /**
  * Create a Sentry handle
  *
@@ -208,7 +280,7 @@ int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
         goto out_exit;
     }
 
-    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, NULL, NULL, &h.so);
+    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, NULL, &h.so);
     if (e != 0) {
         lck_rw_free(h.lck_rw, h.lck_grp);
         lck_grp_free(h.lck_grp);

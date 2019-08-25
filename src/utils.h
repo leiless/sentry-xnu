@@ -5,9 +5,12 @@
 #ifndef SENTRY_XNU_UTILS_H
 #define SENTRY_XNU_UTILS_H
 
+#include <sys/types.h>
+#include <libkern/libkern.h>
+
+#include <sys/socket.h>
 #include <sys/malloc.h>
 #include <kern/debug.h>         /* panic() */
-#include <libkern/libkern.h>
 
 #ifndef __kext_makefile__
 #define KEXTNAME_S          "sentry-xnu"
