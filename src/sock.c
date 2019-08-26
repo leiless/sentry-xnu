@@ -99,10 +99,12 @@ int so_set_tcp_no_delay(socket_t so, int on)
 /**
  * Shutdown and close a socket
  */
-void so_destroy(socket_t __nullable so)
+void so_destroy(socket_t __nullable so, int how)
 {
+    int e;
     if (so != NULL) {
-        sock_shutdown(so, SHUT_RDWR);
+        e = sock_shutdown(so, how);
+        if (e != 0) LOG_ERR("so_destroy() fail  how: %d errno: %d", how, e);
         sock_close(so);
     }
 }

@@ -12,7 +12,6 @@
 #include <sys/socket.h>     /* PF_INET */
 #include <netinet/in.h>     /* IPPROTO_IP */
 #include <sys/filio.h>      /* FIONBIO */
-#include <netinet/tcp.h>    /* TCP_NODELAY */
 
 #include "utils.h"
 #include "sentry.h"
@@ -211,10 +210,13 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
 
-    int e, e2;
+    int e;
+    void *handle;
     socket_t so = NULL;
     struct sockaddr_in sin;
     struct timeval tv;
+    int arg;
+    uint64_t t;
 
     ASSURE_TYPE_ALIAS(errno_t, int);
     ASSURE_TYPE_ALIAS(kern_return_t, int);
@@ -223,7 +225,6 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
 
-    void *handle;
     e = sentry_new(&handle,
             "HTTP://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302", 50);
     if (e != 0) {
@@ -237,6 +238,65 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         LOG_ERR("sock_socket() fail  errno: %d", e);
         e = KERN_FAILURE;
         goto out_exit;
+    }
+
+    arg = 1;
+    e = sock_ioctl(so, FIONBIO, &arg);
+    if (e != 0) {
+        LOG_ERR("sock_ioctl() FIONBIO fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    arg = 1;
+    /* [sic] Just playin' it safe with upcalls */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_UPCALLCLOSEWAIT fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    arg = 1;
+    /* [sic] Assume that SOCK_STREAM always requires a connection */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_KEEPALIVE, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_KEEPALIVE fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    arg = 1;
+    /* [sic] Set SO_NOADDRERR to detect network changes ASAP */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_NOADDRERR, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_NOADDRERR fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+
+    e = sock_setsockopt(so, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_SNDTIMEO fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
+    }
+
+    e = so_set_tcp_no_delay(so, 1);
+    if (e != 0) {
+        LOG_ERR("so_set_tcp_no_delay() fail  errno: %d", e);
+        e = KERN_FAILURE;
+        goto out_close;
     }
 
     bzero(&sin, sizeof(sin));
@@ -257,7 +317,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     kassertf(e == 1, "inet_aton() fail  endpoint: " SENTRY_IP);
     LOG_DBG("sin.sin_addr: %#010x", ntohl(sin.sin_addr.s_addr));
 
-    uint64_t t = utime(NULL);
+    t = utime(NULL);
 #if 1
     e = sock_connect(so, (struct sockaddr *) &sin, MSG_DONTWAIT);
     if (e && e != EINPROGRESS) {
@@ -282,73 +342,12 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     }
 #endif
 
-    int arg;
-
-    arg = 1;
-    e = sock_ioctl(so, FIONBIO, &arg);
-    if (e != 0) {
-        LOG_ERR("sock_ioctl() FIONBIO fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
     LOG("IP " SENTRY_IP "  isconnected: %d isnonblocking: %d",
             sock_isconnected(so), sock_isnonblocking(so));
 
     if (!sock_isconnected(so)) {
         e = KERN_FAILURE;
-        goto out_shutdown;
-    }
-
-    arg = 1;
-    /* [sic] Just playin' it safe with upcalls */
-    e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_UPCALLCLOSEWAIT fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_shutdown;
-    }
-
-    arg = 1;
-    /* [sic] Assume that SOCK_STREAM always requires a connection */
-    e = sock_setsockopt(so, SOL_SOCKET, SO_KEEPALIVE, &arg, sizeof(arg));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_KEEPALIVE fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_shutdown;
-    }
-
-    arg = 1;
-    /* [sic] Set SO_NOADDRERR to detect network changes ASAP */
-    e = sock_setsockopt(so, SOL_SOCKET, SO_NOADDRERR, &arg, sizeof(arg));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_NOADDRERR fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_shutdown;
-    }
-
-    tv.tv_sec = 5;
-    tv.tv_usec = 0;
-
-    e = sock_setsockopt(so, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_SNDTIMEO fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_shutdown;
-    }
-
-    e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_shutdown;
-    }
-
-    e = so_set_tcp_no_delay(so, 1);
-    if (e != 0) {
-        LOG_ERR("so_set_tcp_no_delay() fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_shutdown;
+        goto out_close;
     }
 
     char buf[128];
@@ -361,16 +360,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     /* Sleep some time  let the upcall got notified */
     (void) usleep(1500 * USEC_PER_MSEC);
 
-out_shutdown:
-    e2 = sock_shutdown(so, SHUT_RDWR);
-    if (e2 != 0) {
-        LOG_ERR("sock_shutdown() RDWR fail  errno: %d", e2);
-    } else {
-        LOG_DBG("socket %p RDWR shuted down", so);
-    }
-    /* sock_shutdown() won't reset socket's SS_ISCONNECTED flag? */
 out_close:
-    sock_close(so);
+    so_destroy(so, SHUT_RDWR);
     LOG_DBG("socket %p closed", so);
 out_exit:
 #ifdef DEBUG

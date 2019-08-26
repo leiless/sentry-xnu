@@ -29,7 +29,7 @@ int so_recv(socket_t __nonnull, char * __nullable, size_t, uint64_t);
 
 int so_set_tcp_no_delay(socket_t __nonnull, int);
 
-void so_destroy(socket_t __nullable);
+void so_destroy(socket_t __nullable, int);
 
 #endif /* SENTRY_XNU_SOCK_H */
 

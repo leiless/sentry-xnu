@@ -308,7 +308,7 @@ void sentry_destroy(void *handle)
 {
     sentry_t *h = (sentry_t *) handle;
     if (h != NULL) {
-        so_destroy(h->so);
+        so_destroy(h->so, SHUT_RDWR);
 
         lck_rw_free(h->lck_rw, h->lck_grp);
         lck_grp_free(h->lck_grp);
