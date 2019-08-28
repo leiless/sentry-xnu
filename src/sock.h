@@ -31,5 +31,7 @@ int so_set_tcp_no_delay(socket_t __nonnull, int);
 
 void so_destroy(socket_t __nullable, int);
 
+int so_common_options(socket_t __nonnull, struct timeval, int);
+
 #endif /* SENTRY_XNU_SOCK_H */
 

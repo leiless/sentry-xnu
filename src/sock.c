@@ -4,6 +4,7 @@
 
 #include <sys/errno.h>
 
+#include <sys/filio.h>      /* FIONBIO */
 #include <netinet/in.h>     /* IPPROTO_IP */
 #include <netinet/tcp.h>    /* TCP_NODELAY */
 
@@ -107,5 +108,70 @@ void so_destroy(socket_t __nullable so, int how)
         if (e != 0) LOG_ERR("so_destroy() fail  how: %d errno: %d", how, e);
         sock_close(so);
     }
+}
+
+/**
+ * Set common socket options
+ * @return      0 if success, errno otherwise
+ *              errno result from sock_ioctl(), sock_setsockopt()
+ */
+int so_common_options(socket_t so, struct timeval tv, int tcp_no_delay)
+{
+    int e;
+    int arg;
+
+    kassert_nonnull(so);
+
+    arg = 1;
+    e = sock_ioctl(so, FIONBIO, &arg);
+    if (e != 0) {
+        LOG_ERR("sock_ioctl() FIONBIO fail  errno: %d", e);
+        goto out_exit;
+    }
+
+    arg = 1;
+    /* [sic] Just playin' it safe with upcalls */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_UPCALLCLOSEWAIT fail  errno: %d", e);
+        goto out_exit;
+    }
+
+    arg = 1;
+    /* [sic] Assume that SOCK_STREAM always requires a connection */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_KEEPALIVE, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_KEEPALIVE fail  errno: %d", e);
+        goto out_exit;
+    }
+
+    arg = 1;
+    /* [sic] Set SO_NOADDRERR to detect network changes ASAP */
+    e = sock_setsockopt(so, SOL_SOCKET, SO_NOADDRERR, &arg, sizeof(arg));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_NOADDRERR fail  errno: %d", e);
+        goto out_exit;
+    }
+
+    e = sock_setsockopt(so, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_SNDTIMEO fail  errno: %d", e);
+        goto out_exit;
+    }
+
+    e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (e != 0) {
+        LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
+        goto out_exit;
+    }
+
+    e = so_set_tcp_no_delay(so, tcp_no_delay);
+    if (e != 0) {
+        LOG_ERR("so_set_tcp_no_delay() fail  errno: %d", e);
+        goto out_exit;
+    }
+
+out_exit:
+    return e;
 }
 
