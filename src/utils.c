@@ -71,6 +71,11 @@ void * __nullable util_malloc(size_t size, int flags)
     return addr;
 }
 
+void * __nullable util_malloc_ez(size_t size)
+{
+    return util_malloc(size, 0);
+}
+
 void util_mfree(void * __nullable addr)
 {
     if (addr != NULL) util_mstat(0);
