@@ -215,7 +215,6 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     socket_t so = NULL;
     struct sockaddr_in sin;
     struct timeval tv;
-    int arg;
     uint64_t t;
 
     ASSURE_TYPE_ALIAS(errno_t, int);
@@ -240,61 +239,11 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         goto out_exit;
     }
 
-    arg = 1;
-    e = sock_ioctl(so, FIONBIO, &arg);
-    if (e != 0) {
-        LOG_ERR("sock_ioctl() FIONBIO fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
-    arg = 1;
-    /* [sic] Just playin' it safe with upcalls */
-    e = sock_setsockopt(so, SOL_SOCKET, SO_UPCALLCLOSEWAIT, &arg, sizeof(arg));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_UPCALLCLOSEWAIT fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
-    arg = 1;
-    /* [sic] Assume that SOCK_STREAM always requires a connection */
-    e = sock_setsockopt(so, SOL_SOCKET, SO_KEEPALIVE, &arg, sizeof(arg));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_KEEPALIVE fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
-    arg = 1;
-    /* [sic] Set SO_NOADDRERR to detect network changes ASAP */
-    e = sock_setsockopt(so, SOL_SOCKET, SO_NOADDRERR, &arg, sizeof(arg));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_NOADDRERR fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
     tv.tv_sec = 5;
     tv.tv_usec = 0;
-
-    e = sock_setsockopt(so, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    e = so_common_options(so, tv, 1);
     if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_SNDTIMEO fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
-    e = sock_setsockopt(so, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    if (e != 0) {
-        LOG_ERR("sock_setsockopt() SO_RCVTIMEO fail  errno: %d", e);
-        e = KERN_FAILURE;
-        goto out_close;
-    }
-
-    e = so_set_tcp_no_delay(so, 1);
-    if (e != 0) {
-        LOG_ERR("so_set_tcp_no_delay() fail  errno: %d", e);
+        LOG_ERR("so_common_options() fail  errno: %d", e);
         e = KERN_FAILURE;
         goto out_close;
     }
@@ -328,7 +277,6 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     tv.tv_sec = 3;
     tv.tv_usec = 0;
-
     e = sock_connectwait(so, &tv);
     LOG_DBG("connectwait timed: %llu us", utime(NULL) - t);
     if (e != 0) LOG_DBG("sock_connectwait() fail  errno: %d", e);
