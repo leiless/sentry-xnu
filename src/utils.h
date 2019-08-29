@@ -122,15 +122,6 @@ void * __nullable util_malloc_ez(size_t);
 void util_mfree(void * __nullable);
 void util_massert(void);
 
-/*
- * kern_os_*() family functions provides zero-out memory
- * kern_os_malloc(0) will return NULL
- * see: xnu/libkern/c++/OSRuntime.cpp
- */
-extern void * __nullable kern_os_malloc(size_t);
-extern void * __nullable kern_os_realloc(void * __nullable, size_t);
-void kern_os_free_safe(void * __nullable);
-
 void * __nullable util_zmalloc(size_t);
 void * __nullable util_zrealloc(void * __nullable, size_t);
 void util_zfree(void * __nullable);
