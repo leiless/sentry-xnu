@@ -37,12 +37,21 @@
 #pragma warning (disable : 4001)
 #endif
 
+#ifdef KERNEL_PRIVATE
+#define cJSON_HEAD_COMMIT       "cf0d87a095becada87336ed786f11070e9a037b5"
+
+#include <string.h>             /* strlen(), memcpy() */
+#include <libkern/libkern.h>    /* *printf() */
+
+#include "utils.h"              /* tolower(), kern_os_*(), pseudo_strtod() */
+#else
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <ctype.h>
+#endif
 
 #ifdef ENABLE_LOCALES
 #include <locale.h>
@@ -95,7 +104,11 @@ CJSON_PUBLIC(char *) cJSON_GetStringValue(cJSON *item) {
 CJSON_PUBLIC(const char*) cJSON_Version(void)
 {
     static char version[15];
+#ifdef KERNEL_PRIVATE
+    snprintf(version, sizeof(version), "%i.%i.%i", CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
+#else
     sprintf(version, "%i.%i.%i", CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
+#endif
 
     return version;
 }
@@ -145,6 +158,10 @@ static void * CJSON_CDECL internal_realloc(void *pointer, size_t size)
 {
     return realloc(pointer, size);
 }
+#elif defined(KERNEL_PRIVATE)
+#define internal_malloc     kern_os_malloc
+#define internal_free       kern_os_free_safe
+#define internal_realloc    kern_os_realloc
 #else
 #define internal_malloc malloc
 #define internal_free free
@@ -181,20 +198,34 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 {
     if (hooks == NULL)
     {
+#ifdef KERNEL_PRIVATE
+        global_hooks.allocate = internal_malloc;
+        global_hooks.deallocate = internal_free;
+        global_hooks.reallocate = internal_realloc;
+#else
         /* Reset hooks */
         global_hooks.allocate = malloc;
         global_hooks.deallocate = free;
         global_hooks.reallocate = realloc;
+#endif
         return;
     }
 
+#ifdef KERNEL_PRIVATE
+    global_hooks.allocate = internal_malloc;
+#else
     global_hooks.allocate = malloc;
+#endif
     if (hooks->malloc_fn != NULL)
     {
         global_hooks.allocate = hooks->malloc_fn;
     }
 
+#ifdef KERNEL_PRIVATE
+    global_hooks.deallocate = internal_free;
+#else
     global_hooks.deallocate = free;
+#endif
     if (hooks->free_fn != NULL)
     {
         global_hooks.deallocate = hooks->free_fn;
@@ -202,10 +233,17 @@ CJSON_PUBLIC(void) cJSON_InitHooks(cJSON_Hooks* hooks)
 
     /* use realloc only if both free and malloc are used */
     global_hooks.reallocate = NULL;
+#ifdef KERNEL_PRIVATE
+    if ((global_hooks.allocate == internal_malloc) && (global_hooks.deallocate == internal_free))
+    {
+        global_hooks.reallocate = internal_realloc;
+    }
+#else
     if ((global_hooks.allocate == malloc) && (global_hooks.deallocate == free))
     {
         global_hooks.reallocate = realloc;
     }
+#endif
 }
 
 /* Internal constructor. */
@@ -321,7 +359,11 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
 loop_end:
     number_c_string[i] = '\0';
 
+#ifdef KERNEL_PRIVATE
+    number = pseudo_strtod((const char*)number_c_string, (char**)&after_end);
+#else
     number = strtod((const char*)number_c_string, (char**)&after_end);
+#endif
     if (number_c_string == after_end)
     {
         return false; /* parse_error */
@@ -499,18 +541,30 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
     /* This checks for NaN and Infinity */
     if ((d * 0) != 0)
     {
+#ifdef KERNEL_PRIVATE
+        length = snprintf((char*)number_buffer, sizeof(number_buffer), "null");
+#else
         length = sprintf((char*)number_buffer, "null");
+#endif
     }
     else
     {
         /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
+#ifdef KERNEL_PRIVATE
+        length = snprintf((char*)number_buffer, sizeof(number_buffer), "%1.15g", d);
+#else
         length = sprintf((char*)number_buffer, "%1.15g", d);
+#endif
 
         /* Check whether the original double can be recovered */
         if ((sscanf((char*)number_buffer, "%lg", &test) != 1) || ((double)test != d))
         {
             /* If not, print with 17 decimal places of precision */
+#ifdef KERNEL_PRIVATE
+            length = snprintf((char*)number_buffer, sizeof(number_buffer), "%1.17g", d);
+#else
             length = sprintf((char*)number_buffer, "%1.17g", d);
+#endif
         }
     }
 
@@ -856,7 +910,11 @@ static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffe
         {
             return false;
         }
+#ifdef KERNEL_PRIVATE
+        strncpy((char*)output, "\"\"", sizeof("\"\""));
+#else
         strcpy((char*)output, "\"\"");
+#endif
 
         return true;
     }
@@ -943,7 +1001,11 @@ static cJSON_bool print_string_ptr(const unsigned char * const input, printbuffe
                     break;
                 default:
                     /* escape and print as unicode codepoint */
+#ifdef KERNEL_PRIVATE
+                    snprintf((char*)output_pointer, 6, "u%04x", *input_pointer);
+#else
                     sprintf((char*)output_pointer, "u%04x", *input_pointer);
+#endif
                     output_pointer += 4;
                     break;
             }
@@ -1291,7 +1353,11 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
             {
                 return false;
             }
+#ifdef KERNEL_PRIVATE
+            strncpy((char*)output, "null", 5);
+#else
             strcpy((char*)output, "null");
+#endif
             return true;
 
         case cJSON_False:
@@ -1300,7 +1366,11 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
             {
                 return false;
             }
+#ifdef KERNEL_PRIVATE
+            strncpy((char*)output, "false", 6);
+#else
             strcpy((char*)output, "false");
+#endif
             return true;
 
         case cJSON_True:
@@ -1309,7 +1379,11 @@ static cJSON_bool print_value(const cJSON * const item, printbuffer * const outp
             {
                 return false;
             }
+#ifdef KERNEL_PRIVATE
+            strncpy((char*)output, "true", 5);
+#else
             strcpy((char*)output, "true");
+#endif
             return true;
 
         case cJSON_Number:
