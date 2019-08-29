@@ -88,6 +88,9 @@ void util_massert(void)
     util_mstat(2);
 }
 
+/* XXX: kern_os_free(NULL) will cause kernel panic */
+extern void kern_os_free(void * __nonnull);
+
 void kern_os_free_safe(void *addr)
 {
     if (addr != NULL) kern_os_free(addr);

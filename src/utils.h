@@ -129,7 +129,6 @@ void util_massert(void);
  */
 extern void * __nullable kern_os_malloc(size_t);
 extern void * __nullable kern_os_realloc(void * __nullable, size_t);
-extern void kern_os_free(void * __nonnull);
 void kern_os_free_safe(void * __nullable);
 
 int tolower(int);
