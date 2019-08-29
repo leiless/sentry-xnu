@@ -88,6 +88,11 @@ void util_massert(void)
     util_mstat(2);
 }
 
+void kern_os_free_safe(void *addr)
+{
+    if (addr != NULL) kern_os_free(addr);
+}
+
 int tolower(int c)
 {
     return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;

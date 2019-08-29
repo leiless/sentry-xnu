@@ -122,6 +122,16 @@ void * __nullable util_malloc_ez(size_t);
 void util_mfree(void * __nullable);
 void util_massert(void);
 
+/*
+ * kern_os_*() family functions provides zero-out memory
+ * kern_os_malloc(0) will return NULL
+ * see: xnu/libkern/c++/OSRuntime.cpp
+ */
+extern void * __nullable kern_os_malloc(size_t);
+extern void * __nullable kern_os_realloc(void * __nullable, size_t);
+extern void kern_os_free(void * __nonnull);
+void kern_os_free_safe(void * __nullable);
+
 int tolower(int);
 bool striprefix(const char * __nonnull, const char * __nonnull);
 
@@ -132,7 +142,10 @@ void uuid_string_generate(uuid_string_t __nonnull);
 #define ISO8601_TM_BUFSZ    20u
 int format_iso8601_time(char * __nonnull, size_t);
 
-double pseudo_strtod(const char * __nonnull, char *__nullable *__nullable restrict);
+double pseudo_strtod(
+    const char * __nonnull,
+    char * __nullable * __nullable restrict
+);
 
 #endif /* SENTRY_XNU_UTILS_H */
 
