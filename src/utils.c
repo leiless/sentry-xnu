@@ -55,8 +55,6 @@ static void util_mstat(int opt)
         break;
     case 2:
         if (cnt == 0) return;
-        /* Fall through */
-    default:
         break;
     }
     panicf("FIXME: potential memleak  opt: %d cnt: %lld", opt, cnt);
@@ -78,8 +76,10 @@ void * __nullable util_malloc_ez(size_t size)
 
 void util_mfree(void * __nullable addr)
 {
-    if (addr != NULL) util_mstat(0);
-    _FREE(addr, M_TEMP);
+    if (addr != NULL) {
+        _FREE(addr, M_TEMP);
+        util_mstat(0);
+    }
 }
 
 /* XXX: call when all memory freed */
