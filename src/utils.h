@@ -122,6 +122,7 @@ void * __nullable util_malloc_ez(size_t);
 void util_mfree(void * __nullable);
 void util_massert(void);
 
+int tolower(int);
 bool striprefix(const char * __nonnull, const char * __nonnull);
 
 clock_sec_t time(clock_sec_t * __nullable);
@@ -130,6 +131,8 @@ void uuid_string_generate(uuid_string_t __nonnull);
 
 #define ISO8601_TM_BUFSZ    20u
 int format_iso8601_time(char * __nonnull, size_t);
+
+double pseudo_strtod(const char * __nonnull, char *__nullable *__nullable restrict);
 
 #endif /* SENTRY_XNU_UTILS_H */
 

@@ -88,7 +88,7 @@ void util_massert(void)
     util_mstat(2);
 }
 
-static inline char tolower(char c)
+int tolower(int c)
 {
     return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
 }
@@ -224,5 +224,14 @@ void uuid_string_generate(uuid_string_t out)
     kassert_nonnull(out);
     uuid_generate_random(u);
     uuid_unparse_lower(u, out);
+}
+
+/**
+ * Pseudo strtod() in kernel
+ * The fractional part always ignored
+ */
+double pseudo_strtod(const char *nptr, char **restrict endptr)
+{
+    return (double) strtouq(nptr, endptr, 10);
 }
 
