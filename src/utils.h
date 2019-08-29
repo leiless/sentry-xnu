@@ -131,6 +131,11 @@ extern void * __nullable kern_os_malloc(size_t);
 extern void * __nullable kern_os_realloc(void * __nullable, size_t);
 void kern_os_free_safe(void * __nullable);
 
+void * __nullable util_zmalloc(size_t);
+void * __nullable util_zrealloc(void * __nullable, size_t);
+void util_zfree(void * __nullable);
+void util_zassert(void);
+
 int tolower(int);
 bool striprefix(const char * __nonnull, const char * __nonnull);
 

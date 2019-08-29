@@ -88,8 +88,60 @@ void util_massert(void)
     util_mstat(2);
 }
 
-/* XXX: kern_os_free(NULL) will cause kernel panic */
+/*
+ * kern_os_*() family functions provides zero-out memory
+ * kern_os_malloc(0) will return NULL
+ * XXX: kern_os_free(NULL) will cause kernel panic
+ * see: xnu/libkern/c++/OSRuntime.cpp
+ */
+extern void * __nullable kern_os_malloc(size_t);
+extern void * __nullable kern_os_realloc(void * __nullable, size_t);
 extern void kern_os_free(void * __nonnull);
+
+static void util_zstat(int opt)
+{
+    static volatile SInt64 cnt = 0;
+    switch (opt) {
+    case 0:
+        if (OSDecrementAtomic64(&cnt) > 0) return;
+        break;
+    case 1:
+        if (OSIncrementAtomic64(&cnt) >= 0) return;
+        break;
+    case 2:
+        if (cnt == 0) return;
+        break;
+    }
+    panicf("FIXME: potential memleak  opt: %d cnt: %lld", opt, cnt);
+}
+
+void *util_zmalloc(size_t sz)
+{
+    void *addr = kern_os_malloc(sz);
+    if (likely(addr != NULL)) util_zstat(1);
+    return addr;
+}
+
+void *util_zrealloc(void *addr0, size_t sz)
+{
+    void *addr1 = kern_os_realloc(addr0, sz);
+    if (!addr0 && addr1) util_zstat(1);
+    return addr1;
+}
+
+void util_zfree(void *addr)
+{
+    if (addr != NULL) {
+        kern_os_free(addr);
+        util_zstat(0);
+    }
+}
+
+/* XXX: call when all memory freed */
+void util_zassert(void)
+{
+    util_zstat(2);
+}
 
 void kern_os_free_safe(void *addr)
 {
