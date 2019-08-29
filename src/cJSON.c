@@ -159,9 +159,9 @@ static void * CJSON_CDECL internal_realloc(void *pointer, size_t size)
     return realloc(pointer, size);
 }
 #elif defined(KERNEL_PRIVATE)
-#define internal_malloc     kern_os_malloc
-#define internal_free       kern_os_free_safe
-#define internal_realloc    kern_os_realloc
+#define internal_malloc     util_zmalloc
+#define internal_free       util_zfree
+#define internal_realloc    util_zrealloc
 #else
 #define internal_malloc malloc
 #define internal_free free
