@@ -16,6 +16,7 @@
 #include "utils.h"
 #include "sentry.h"
 #include "sock.h"
+#include "cJSON.h"
 
 /*
  * DNS A-record of sentry.io
@@ -206,6 +207,37 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     }
 }
 
+static void cjson_test(void)
+{
+    cJSON *obj;
+    char *str;
+
+    LOG_DBG("%s", cJSON_Version());
+
+    obj = cJSON_CreateObject();
+
+    str = cJSON_Print(obj);
+    LOG_DBG("%s", str);
+    cJSON_Minify(str);
+    LOG_DBG("%s", str);
+    util_zfree(str);
+
+    (void) cJSON_AddBoolToObject(obj, "foo", 1);
+    (void) cJSON_AddNullToObject(obj, "bar");
+    (void) cJSON_AddArrayToObject(obj, "arr");
+    (void) cJSON_AddObjectToObject(obj, "obj");
+    (void) cJSON_AddStringToObject(obj, "version", cJSON_Version());
+    (void) cJSON_AddNumberToObject(obj, "num", random() % 100000);
+
+    str = cJSON_Print(obj);
+    LOG_DBG("%s", str);
+    cJSON_Minify(str);
+    LOG_DBG("%s", str);
+    util_zfree(str);
+
+    cJSON_Delete(obj);
+}
+
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
@@ -216,6 +248,10 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     struct sockaddr_in sin;
     struct timeval tv;
     uint64_t t;
+
+    cjson_test();
+    e = KERN_FAILURE;
+    goto out_exit;
 
     ASSURE_TYPE_ALIAS(errno_t, int);
     ASSURE_TYPE_ALIAS(kern_return_t, int);

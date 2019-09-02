@@ -105,7 +105,7 @@ CJSON_PUBLIC(const char*) cJSON_Version(void)
 {
     static char version[15];
 #ifdef KERNEL_PRIVATE
-    snprintf(version, sizeof(version), "%i.%i.%i", CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
+    snprintf(version, sizeof(version), "%u.%u.%u", CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
 #else
     sprintf(version, "%i.%i.%i", CJSON_VERSION_MAJOR, CJSON_VERSION_MINOR, CJSON_VERSION_PATCH);
 #endif
@@ -531,7 +531,9 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
     size_t i = 0;
     unsigned char number_buffer[26]; /* temporary buffer to print the number into */
     unsigned char decimal_point = get_decimal_point();
+#ifndef KERNEL_PRIVATE
     double test;
+#endif
 
     if (output_buffer == NULL)
     {
@@ -549,23 +551,20 @@ static cJSON_bool print_number(const cJSON * const item, printbuffer * const out
     }
     else
     {
+#ifndef KERNEL_PRIVATE
         /* Try 15 decimal places of precision to avoid nonsignificant nonzero digits */
-#ifdef KERNEL_PRIVATE
-        length = snprintf((char*)number_buffer, sizeof(number_buffer), "%1.15g", d);
-#else
         length = sprintf((char*)number_buffer, "%1.15g", d);
-#endif
 
         /* Check whether the original double can be recovered */
         if ((sscanf((char*)number_buffer, "%lg", &test) != 1) || ((double)test != d))
         {
             /* If not, print with 17 decimal places of precision */
-#ifdef KERNEL_PRIVATE
-            length = snprintf((char*)number_buffer, sizeof(number_buffer), "%1.17g", d);
-#else
             length = sprintf((char*)number_buffer, "%1.17g", d);
-#endif
         }
+#else
+        /* Kernel doesn't support floating-point number, treat it as integer */
+        length = snprintf((char *) number_buffer, sizeof(number_buffer), "%lld", (int64_t) d);
+#endif
     }
 
     /* sprintf failed or buffer overrun occurred */
