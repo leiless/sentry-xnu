@@ -142,5 +142,7 @@ double pseudo_strtod(
     char * __nullable * __nullable restrict
 );
 
+uint32_t urand32(uint32_t, uint32_t);
+
 #endif /* SENTRY_XNU_UTILS_H */
 

@@ -8,6 +8,8 @@
 #include <kern/clock.h>
 #include <libkern/OSAtomic.h>
 
+#include <libkern/crypto/rand.h>
+
 #include "utils.h"
 
 uint64_t utime(uint64_t * __nullable p)
@@ -288,5 +290,19 @@ void uuid_string_generate(uuid_string_t out)
 double pseudo_strtod(const char *nptr, char **restrict endptr)
 {
     return (double) strtouq(nptr, endptr, 10);
+}
+
+/**
+ * Generate a random number in range [lo, hi)
+ */
+uint32_t urand32(uint32_t lo, uint32_t hi)
+{
+    uint32_t u;
+    int e;
+    kassertf(lo < hi, "Misuse of urand32()  %#x vs %#x", lo, hi);
+    e = random_buf(&u, sizeof(u));
+    kassertf(e == 0, "random_buf() fail  error: %d", e);
+    /* TODO: if e != 0, we should fallback to use random() */
+    return lo + u % (hi - lo);
 }
 

@@ -39,15 +39,16 @@ typedef struct {
     volatile UInt32 connected;
 } sentry_t;
 
-static void sentry_handle_debug(const sentry_t *handle)
+void sentry_debug(void *handle)
 {
+    sentry_t *h = (sentry_t *) handle;
     uuid_string_t u;
     char * __nullable ctx;
 
-    kassert_nonnull(handle);
+    kassert_nonnull(h);
 
-    uuid_unparse_lower(handle->last_event_id, u);
-    ctx = cJSON_Print(handle->ctx);
+    uuid_unparse_lower(h->last_event_id, u);
+    ctx = cJSON_Print(h->ctx);
     cJSON_Minify(ctx);  /* cJSON_Minify(NULL) do nop */
 
     LOG_DBG("Sentry handle %p: "
@@ -56,12 +57,11 @@ static void sentry_handle_debug(const sentry_t *handle)
             "last_event_id: %s "
             "lck_grp: %p lck_rw: %p "
             "socket: %p ctx: %s",
-        handle,
-        ntohl(handle->ip.s_addr), handle->port,
-        handle->pubkey, handle->projid,
-        handle->sample_rate,
-        u, handle->lck_grp, handle->lck_rw,
-        handle->so, ctx);
+                h, ntohl(h->ip.s_addr), h->port,
+                h->pubkey, h->projid,
+                h->sample_rate,
+                u, h->lck_grp, h->lck_rw,
+                h->so, ctx);
 
     util_zfree(ctx);
 }
@@ -234,9 +234,6 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     }
 }
 
-#define SENTRY_XNU_NAME         "sentry-xnu"
-#define SENTRY_XNU_VERSION      "0.3"
-
 static void ctx_populate(cJSON *ctx)
 {
     cJSON *sdk;
@@ -362,7 +359,7 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
 
     (void) memcpy(*handlep, &h, sizeof(h));
 
-    sentry_handle_debug(*handlep);
+    sentry_debug(*handlep);
 
 out_exit:
     return e;
@@ -380,5 +377,41 @@ void sentry_destroy(void *handle)
 
         util_mfree(h);
     }
+}
+
+static void sentry_capture_message_ap(
+        void * __nonnull handle,
+        uint32_t flags,
+        const char * __nonnull fmt,
+        va_list ap_in)
+{
+    static volatile uint64_t eid = 0, t;
+
+    sentry_t *h = (sentry_t *) handle;
+    uuid_string_t uu;
+    char ts[ISO8601_TM_BUFSZ];
+    va_list ap;
+
+    kassert_nonnull(h);
+    kassert_nonnull(fmt);
+
+    UNUSED(flags, ap_in);
+    UNUSED(uu, ts, ap);
+
+    t = eid++;
+    if (urand32(0, 100) >= h->sample_rate) {
+        LOG_DBG("Event %llx sampled out  flags: %#x fotmat: %s", t, flags, fmt);
+        return;
+    }
+
+    /* TODO */
+}
+
+void sentry_capture_message(void *handle, uint32_t flags, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    sentry_capture_message_ap(handle, flags, fmt, ap);
+    va_end(ap);
 }
 

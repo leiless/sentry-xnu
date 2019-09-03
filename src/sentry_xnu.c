@@ -25,10 +25,6 @@
 #define SENTRY_IP           "35.188.42.15"
 #define SENTRY_PORT         80
 
-#define SENTRY_XNU_NAME     "sentry-udev"
-#define SENTRY_XNU_VER      "0.1"
-#define SENTRY_UA           SENTRY_XNU_NAME "/" SENTRY_XNU_VER
-
 /**
  * NOET: sentry_client not enclose, use User-Agent header instead
  * see: https://docs.sentry.io/development/sdk-dev/overview/#authentication
@@ -72,7 +68,7 @@ static void format_message_payload(
             "\"timestamp\":\"%s\","
             "\"logger\":\"(default)\","
             "\"platform\":\"c\","
-            "\"sdk\":{\"name\":\"" SENTRY_XNU_NAME "\",\"version\":\"" SENTRY_XNU_VER "\"},"
+            "\"sdk\":{\"name\":\"" SENTRY_XNU_NAME "\",\"version\":\"" SENTRY_XNU_VERSION "\"},"
             "\"message\":\"%s\""
             "}", u, t, msg);
     kassertf(n >= 0, "snprintf() fail  n: %d", n);
@@ -85,7 +81,7 @@ static void format_message_payload(
 #define SENTRY_PROJID   "1533302"
 #define SENTRY_PUBKEY   "3bebc23f79274f93b6500e3ecf0cf22b"
 
-static void sentry_capture_message(socket_t so, const char *msg)
+static void sentry_post_message(socket_t so, const char *msg)
 {
     int e;
     char buf[BUFSZ];
@@ -101,7 +97,7 @@ static void sentry_capture_message(socket_t so, const char *msg)
 
     (void) snprintf(buf, BUFSZ, "POST /api/" SENTRY_PROJID "/store/ HTTP/1.1\r\n"
                                 "Host: sentry.io\r\n"
-                                "User-Agent: " SENTRY_UA "\r\n"
+                                "User-Agent: " SENTRY_XNU_UA "\r\n"
                                 "X-Sentry-Auth: %s\r\n"
                                 "Content-Type: application/json\r\n"
                                 "Content-Length: %zu\r\n"
@@ -302,10 +298,10 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     char buf[128];
     (void) snprintf(buf, sizeof(buf), "hello world! %u", random() % 100000);
-    sentry_capture_message(so, buf);
+    sentry_post_message(so, buf);
 
     (void) snprintf(buf, sizeof(buf), "hello world! %u", random() % 100000);
-    sentry_capture_message(so, buf);
+    sentry_post_message(so, buf);
 
     /* Sleep some time  let the upcall got notified */
     (void) usleep(1500 * USEC_PER_MSEC);
