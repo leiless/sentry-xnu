@@ -30,39 +30,40 @@ typedef struct {
     uint8_t sample_rate;    /* Range: [0, 100] */
 
     uuid_t last_event_id;
+    cJSON *ctx;
 
     lck_grp_t *lck_grp;
     lck_rw_t *lck_rw;
 
     socket_t so;
     volatile UInt32 connected;
-
-#if 0
-    thread_t thread;
-    volatile uint32_t cond_keepalive;
-#endif
 } sentry_t;
 
 static void sentry_handle_debug(const sentry_t *handle)
 {
     uuid_string_t u;
+    char * __nullable ctx;
 
     kassert_nonnull(handle);
 
     uuid_unparse_lower(handle->last_event_id, u);
+    ctx = cJSON_Print(handle->ctx);
+    cJSON_Minify(ctx);  /* cJSON_Minify(NULL) do nop */
 
     LOG_DBG("Sentry handle %p: "
             "ip: %#010x port: %u pubkey: %s "
             "projid: %llu sample_rate: %u "
             "last_event_id: %s "
             "lck_grp: %p lck_rw: %p "
-            "socket: %p",
+            "socket: %p ctx: %s",
         handle,
         ntohl(handle->ip.s_addr), handle->port,
         handle->pubkey, handle->projid,
         handle->sample_rate,
         u, handle->lck_grp, handle->lck_rw,
-        handle->so);
+        handle->so, ctx);
+
+    util_zfree(ctx);
 }
 
 #define HTTP_PORT       80
@@ -191,20 +192,19 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     UNUSED(waitf);
 
     handle = (sentry_t *) cookie;
-    kassertf(so == handle->so, "Mismatch socket in upcall  %p vs %p",
-                                so, handle->so);
+    kassertf(so == handle->so, "[upcall] Bad cookie  %p vs %p", so, handle->so);
 
     if (!sock_isconnected(so)) {
         optval = 0;
         optlen = sizeof(optval);
         /* sock_getsockopt() SO_ERROR should always success */
         e = sock_getsockopt(so, SOL_SOCKET, SO_ERROR, &optval, &optlen);
-        kassertf(e == 0, "sock_getsockopt() SO_ERROR fail  errno: %d", e);
-        LOG_ERR("socket not connected  errno: %d", optval);
+        kassertf(e == 0, "[upcall] sock_getsockopt() SO_ERROR fail  errno: %d", e);
+        LOG_ERR("[upcall] socket not connected  errno: %d", optval);
         return;
     } else {
         if (OSCompareAndSwap(0, 1, &handle->connected)) {
-            LOG_DBG("socket %p is connected!", so);
+            LOG_DBG("[upcall] socket %p is connected!", so);
             return;
         }
     }
@@ -212,26 +212,78 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     optlen = sizeof(optval);
     e = sock_getsockopt(so, SOL_SOCKET, SO_NREAD, &optval, &optlen);
     if (e != 0) {
-        LOG_ERR("sock_getsockopt() SO_NREAD fail  errno: %d", e);
+        LOG_ERR("[upcall] sock_getsockopt() SO_NREAD fail  errno: %d", e);
     } else {
         kassertf(optlen == sizeof(optval),
-            "sock_getsockopt() SO_NREAD optlen = %d?", optlen);
+            "[upcall] sock_getsockopt() SO_NREAD optlen = %d?", optlen);
 
         if (optval == 0) {
-            LOG_DBG("SO_NREAD = 0, nothing to read");
+            LOG_DBG("[upcall] SO_NREAD = 0, nothing to read");
             return;
         }
 
-        LOG_DBG("SO_NREAD: %d", optval);
+        LOG_DBG("[upcall] SO_NREAD: %d", optval);
     }
 
     /* We should read only when SO_NREAD return a positive value */
     e = so_recv(so, buf, BUFSZ, 0);
     if (e != 0) {
-        LOG_ERR("so_recv() fail  errno: %d", e);
+        LOG_ERR("[upcall] so_recv() fail  errno: %d", e);
     } else {
-        LOG("Response (size: %zu)\n%s", strlen(buf), buf);
+        LOG("[upcall] Response (size: %zu)\n%s", strlen(buf), buf);
     }
+}
+
+#define SENTRY_XNU_NAME         "sentry-xnu"
+#define SENTRY_XNU_VERSION      "0.3"
+
+static void ctx_populate(cJSON *ctx)
+{
+    cJSON *sdk;
+
+    kassert_nonnull(ctx);
+
+    /* see: https://docs.sentry.io/development/sdk-dev/event-payloads/sdk */
+    sdk = cJSON_CreateObject();
+    if (sdk != NULL) {
+        /* name, version both must required */
+        (void) cJSON_AddStringToObject(sdk, "name", SENTRY_XNU_NAME);
+        (void) cJSON_AddStringToObject(sdk, "version", SENTRY_XNU_VERSION);
+        cJSON_AddItemToObjectCS(ctx, "sdk", sdk);
+    }
+
+    /* see: https://docs.sentry.io/development/sdk-dev/event-payloads */
+    (void) cJSON_AddStringToObject(ctx, "logger", "(unspecified)");
+    (void) cJSON_AddStringToObject(ctx, "platform", "c");
+
+    /* TODO: populate contexts */
+    /* see: https://docs.sentry.io/development/sdk-dev/event-payloads/contexts */
+}
+
+/**
+ * Reinitialize json context of a Sentry handle
+ * @return      true if success, false otherwise
+ */
+static bool sentry_ctx_clear(void *handle)
+{
+    sentry_t *h = (sentry_t *) handle;
+    cJSON *ctx0, *ctx1;
+
+    kassert_nonnull(h);
+
+    ctx1 = cJSON_CreateObject();
+    if (ctx1 == NULL) return false;
+
+    ctx_populate(ctx1);
+
+    lck_rw_lock_exclusive(h->lck_rw);
+    ctx0 = h->ctx;
+    h->ctx = ctx1;
+    lck_rw_unlock_exclusive(h->lck_rw);
+
+    cJSON_Delete(ctx0);
+
+    return true;
 }
 
 /**
@@ -243,13 +295,16 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
  *
  * @param handlep       [OUT] pointer to the Sentry handle
  * @param dsn           The client key
+ * @param ctx           Initial cJSON context(nullable)
  * @param sample_rate   Sample rate [0, 100]
  * @return              0 if success, errno otherwise
  */
-int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
+int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sample_rate)
 {
     int e = 0;
     sentry_t h;
+
+    UNUSED(ctx);
 
     if (handlep == NULL || dsn == NULL || sample_rate > 100) {
         e = EINVAL;
@@ -280,9 +335,17 @@ int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
         goto out_exit;
     }
 
+    if (!sentry_ctx_clear(&h)) {
+        e = ENOMEM;
+        lck_rw_free(h.lck_rw, h.lck_grp);
+        lck_grp_free(h.lck_grp);
+        goto out_exit;
+    }
+
     *handlep = util_malloc(sizeof(h), M_NOWAIT);
     if (*handlep == NULL) {
         e = ENOMEM;
+        cJSON_Delete(h.ctx);
         lck_rw_free(h.lck_rw, h.lck_grp);
         lck_grp_free(h.lck_grp);
         goto out_exit;
@@ -291,6 +354,7 @@ int sentry_new(void **handlep, const char *dsn, uint32_t sample_rate)
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, *handlep, &h.so);
     if (e != 0) {
         util_mfree(*handlep);
+        cJSON_Delete(h.ctx);
         lck_rw_free(h.lck_rw, h.lck_grp);
         lck_grp_free(h.lck_grp);
         goto out_exit;
@@ -310,6 +374,7 @@ void sentry_destroy(void *handle)
     if (h != NULL) {
         so_destroy(h->so, SHUT_RDWR);
 
+        cJSON_Delete(h->ctx);
         lck_rw_free(h->lck_rw, h->lck_grp);
         lck_grp_free(h->lck_grp);
 

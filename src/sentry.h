@@ -5,8 +5,16 @@
 #ifndef SENTRY_H
 #define SENTRY_H
 
-int sentry_new(void **, const char *, uint32_t);
-void sentry_destroy(void *);
+#include "cJSON.h"
+
+int sentry_new(
+    void * __nullable * __nonnull,
+    const char * __nonnull,
+    const cJSON * __nullable,
+    uint32_t
+);
+
+void sentry_destroy(void * __nullable);
 
 #endif /* SENTRY_H */
 
