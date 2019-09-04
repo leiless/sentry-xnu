@@ -73,7 +73,7 @@ void * __nullable util_malloc(size_t size, int flags)
 
 void * __nullable util_malloc_ez(size_t size)
 {
-    return util_malloc(size, 0);
+    return util_malloc(size, M_NOWAIT);
 }
 
 void util_mfree(void * __nullable addr)
@@ -301,8 +301,11 @@ uint32_t urand32(uint32_t lo, uint32_t hi)
     int e;
     kassertf(lo < hi, "Misuse of urand32()  %#x vs %#x", lo, hi);
     e = random_buf(&u, sizeof(u));
-    kassertf(e == 0, "random_buf() fail  error: %d", e);
-    /* TODO: if e != 0, we should fallback to use random() */
+    /*
+     * Fallback to random() if random_buf() failed
+     * [sic random()] The result is uniform on [0, 2^31 - 1]
+     */
+    if (e != 0) u = random();
     return lo + u % (hi - lo);
 }
 

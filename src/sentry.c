@@ -339,7 +339,7 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
         goto out_exit;
     }
 
-    *handlep = util_malloc(sizeof(h), M_NOWAIT);
+    *handlep = util_malloc_ez(sizeof(h));
     if (*handlep == NULL) {
         e = ENOMEM;
         cJSON_Delete(h.ctx);
@@ -391,6 +391,8 @@ static void sentry_capture_message_ap(
     uuid_string_t uu;
     char ts[ISO8601_TM_BUFSZ];
     va_list ap;
+    int n, n2;
+    char *msg;
 
     kassert_nonnull(h);
     kassert_nonnull(fmt);
@@ -404,7 +406,46 @@ static void sentry_capture_message_ap(
         return;
     }
 
-    /* TODO */
+out_toctou:
+    va_copy(ap, ap_in);
+    n = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    kassertf(n >= 0, "vsnprintf() #1 fail  n: %d", n);
+
+    if (strchr(fmt, '%') == NULL) {
+        /*
+         * If % absent in fmt, it means it's a plain text
+         *  we have no need to malloc and formatting
+         */
+        msg = (char *) fmt;
+    } else {
+        msg = util_malloc_ez(n + 1);
+        if (unlikely(msg == NULL)) {
+            /*
+             * Fallback XXX:
+             *  fmt contains format specifier
+             *  can it leads to kernel panic due to luck of adequate argument(s)
+             */
+            msg = (char *) fmt;
+        } else {
+            va_copy(ap, ap_in);
+            n2 = vsnprintf(msg, n + 1, fmt, ap);
+            va_end(ap);
+            kassertf(n2 >= 0, "vsnprintf() #2 fail  n: %d", n2);
+
+            if (unlikely(n2 > n)) {
+                util_mfree(msg);
+                /* NOTE: we may overcommit some bytes to prevent potential TOCTOU attacks */
+                goto out_toctou;
+            }
+
+            n = n2; /* Correct n to its final value, in case we use it later */
+        }
+    }
+
+    /* TODO: Populate message context and send request */
+
+    if (msg != fmt) util_mfree(msg);
 }
 
 void sentry_capture_message(void *handle, uint32_t flags, const char *fmt, ...)
