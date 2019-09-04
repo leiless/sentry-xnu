@@ -63,7 +63,7 @@ static void util_mstat(int opt)
 }
 
 /* Zero size allocation will return a NULL */
-void * __nullable util_malloc(size_t size, int flags)
+void * __nullable util_malloc0(size_t size, int flags)
 {
     /* _MALLOC `type' parameter is a joke */
     void *addr = _MALLOC(size, M_TEMP, flags);
@@ -71,9 +71,9 @@ void * __nullable util_malloc(size_t size, int flags)
     return addr;
 }
 
-void * __nullable util_malloc_ez(size_t size)
+void * __nullable util_malloc(size_t size)
 {
-    return util_malloc(size, M_NOWAIT);
+    return util_malloc0(size, M_NOWAIT);
 }
 
 void util_mfree(void * __nullable addr)

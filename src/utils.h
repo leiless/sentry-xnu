@@ -117,8 +117,8 @@ uint64_t utime(uint64_t * __nullable);
 #endif
 int usleep(uint64_t);
 
-void * __nullable util_malloc(size_t, int);
-void * __nullable util_malloc_ez(size_t);
+void * __nullable util_malloc0(size_t, int);
+void * __nullable util_malloc(size_t);
 void util_mfree(void * __nullable);
 void util_massert(void);
 

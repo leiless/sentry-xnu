@@ -339,7 +339,7 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
         goto out_exit;
     }
 
-    *handlep = util_malloc_ez(sizeof(h));
+    *handlep = util_malloc(sizeof(h));
     if (*handlep == NULL) {
         e = ENOMEM;
         cJSON_Delete(h.ctx);
@@ -419,7 +419,7 @@ out_toctou:
          */
         msg = (char *) fmt;
     } else {
-        msg = util_malloc_ez(n + 1);
+        msg = util_malloc(n + 1);
         if (unlikely(msg == NULL)) {
             /*
              * Fallback XXX:
