@@ -30,12 +30,12 @@ typedef struct {
     uint8_t sample_rate;    /* Range: [0, 100] */
 
     uuid_t last_event_id;
-    cJSON *ctx;
+    cJSON * __nonnull ctx;
 
-    lck_grp_t *lck_grp;
-    lck_rw_t *lck_rw;
+    lck_grp_t * __nonnull lck_grp;
+    lck_rw_t * __nonnull lck_rw;
 
-    socket_t so;
+    socket_t __nonnull so;
     volatile UInt32 connected;
 } sentry_t;
 
@@ -379,6 +379,26 @@ void sentry_destroy(void *handle)
     }
 }
 
+static const char * const sentry_levels[] = {
+    /* Default level is error */
+    "error", "debug", "info", "warning", "fatal",
+};
+
+#define FLAGS_TO_LEVEL(flags)       ((flags) >> 29u)
+
+static void msg_set_level_attr(sentry_t *h, uint32_t flags)
+{
+    uint32_t i = FLAGS_TO_LEVEL(flags);
+    kassert_nonnull(h);
+
+    if (i < ARRAY_SIZE(sentry_levels)) {
+        /* TODO */
+    } else {
+        /* Correct to error level */
+        LOG_ERR("Bad Sentry event level: %u", i);
+    }
+}
+
 static void sentry_capture_message_ap(
         void * __nonnull handle,
         uint32_t flags,
@@ -444,6 +464,12 @@ out_toctou:
     }
 
     /* TODO: Populate message context and send request */
+
+    lck_rw_lock_exclusive(h->lck_rw);
+
+    msg_set_level_attr(h, flags);
+
+    lck_rw_unlock_exclusive(h->lck_rw);
 
     if (msg != fmt) util_mfree(msg);
 }
