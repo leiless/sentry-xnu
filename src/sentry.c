@@ -24,7 +24,7 @@
 
 typedef struct {
     struct in_addr ip;
-    uint16_t port;
+    uint16_t port;      /* XXX: please wrap with htons() */
 
     char pubkey[UUID_BUFSZ_COMPACT];
     uint64_t projid;
@@ -193,6 +193,15 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     UNUSED(waitf);
 
     handle = (sentry_t *) cookie;
+    if (so != handle->so) {
+        uint64_t x, y;
+        x = (uint64_t) so;
+        y = (uint64_t) handle->so;
+        LOG_ERR("[upcall] Bad cookie  %#x%x vs %#x%x", (uint32_t) (x >> 32), (uint32_t) (x & 0xffffffff), (uint32_t) (y >> 32), (uint32_t) (y & 0xffffffff));
+        //LOG_ERR("[upcall] Bad cookie  %p vs %p", so, handle->so);
+        return;
+    }
+
     kassertf(so == handle->so, "[upcall] Bad cookie  %p vs %p", so, handle->so);
 
     if (!sock_isconnected(so)) {
@@ -303,6 +312,8 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
 {
     int e = 0;
     sentry_t h;
+    struct timeval tv;
+    struct sockaddr_in sin;
 
     UNUSED(ctx);
 
@@ -359,8 +370,58 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
         lck_grp_free(h.lck_grp);
         goto out_exit;
     }
+    uint64_t x;
+    x = (uint64_t) h.so;
+    LOG_DBG(">>> %#x%x", (uint32_t) (x >> 32), (uint32_t) (x & 0xffffffff));
+
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    e = so_common_options(h.so, tv, 1);
+    if (e != 0) {
+out_fail:
+        so_destroy(h.so, SHUT_RDWR);
+        util_mfree(*handlep);
+        cJSON_Delete(h.ctx);
+        lck_rw_free(h.lck_rw, h.lck_grp);
+        lck_grp_free(h.lck_grp);
+        goto out_exit;
+    }
+
+    bzero(&sin, sizeof(sin));
+    /*
+     * XXX:
+     *  (struct sockaddr).sin_len must be sizeof(struct sockaddr)
+     *  otherwise sock_connect will return EINVAL
+     *
+     * see:
+     *  xnu/bsd/kern/kpi_socket.c#sock_connect
+     *  xnu/bsd/kern/uipc_socket.c#soconnectlock
+     *  xnu/bsd/netinet/raw_ip.c#rip_usrreqs, rip_connect
+     */
+    sin.sin_len = sizeof(sin);
+    sin.sin_family = PF_INET;
+    sin.sin_port = htons(h.port);
+    sin.sin_addr = h.ip;
+
+#if 1
+    e = sock_connect(h.so, (struct sockaddr *) &sin, MSG_DONTWAIT);
+    if (e != 0) {
+        if (e != EINPROGRESS) goto out_fail;
+        e = 0;
+    }
+
+    tv.tv_sec = 3;
+    tv.tv_usec = 0;
+    e = sock_connectwait(h.so, &tv);
+    if (e != 0) LOG_ERR("sock_connectwait() fail  errno: %d", e);
+#else
+    e = sock_connect(h.so, (struct sockaddr *) &sin, 0);
+    if (e != 0) goto out_fail;
+#endif
 
     (void) memcpy(*handlep, &h, sizeof(h));
+    x = (uint64_t) ((sentry_t *) (*handlep))->so;
+    LOG_DBG(">>> %#x%x", (uint32_t) (x >> 32), (uint32_t) (x & 0xffffffff));
 
     sentry_debug(*handlep);
 

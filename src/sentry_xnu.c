@@ -81,7 +81,8 @@ static void format_message_payload(
 #define SENTRY_PROJID   "1533302"
 #define SENTRY_PUBKEY   "3bebc23f79274f93b6500e3ecf0cf22b"
 
-static void sentry_post_message(socket_t so, const char *msg)
+//static
+void sentry_post_message(socket_t so, const char *msg)
 {
     int e;
     char buf[BUFSZ];
@@ -139,7 +140,8 @@ static volatile UInt32 so_connected = 0;
  * @param cookie    The cookie passed in when the socket was created.
  * @param waitf     Indicates whether or not it's safe to block.
  */
-static void so_upcall(socket_t so, void *cookie, int waitf)
+//static
+void so_upcall(socket_t so, void *cookie, int waitf)
 {
     int e;
     int optval, optlen;
@@ -203,16 +205,20 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     }
 }
 
+#define TEST_ENANBLE      0
+
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
 
     int e;
     void *handle;
-    socket_t so = NULL;
     struct sockaddr_in sin;
+#if TEST_ENANBLE
+    socket_t so = NULL;
     struct timeval tv;
     uint64_t t;
+#endif
 
     ASSURE_TYPE_ALIAS(errno_t, int);
     ASSURE_TYPE_ALIAS(kern_return_t, int);
@@ -231,6 +237,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         sentry_destroy(handle);
     }
 
+#if TEST_ENANBLE
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, NULL, &so);
     if (e != 0) {
         LOG_ERR("sock_socket() fail  errno: %d", e);
@@ -303,16 +310,21 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     (void) snprintf(buf, sizeof(buf), "hello world! %u", random() % 100000);
     sentry_post_message(so, buf);
+#endif
 
     /* Sleep some time  let the upcall got notified */
     (void) usleep(1500 * USEC_PER_MSEC);
 
+#if TEST_ENANBLE
 out_close:
     so_destroy(so, SHUT_RDWR);
     LOG_DBG("socket %p closed", so);
 out_exit:
+#endif
+
     util_massert();
     util_zassert();
+
 #ifdef DEBUG
     return KERN_FAILURE;
 #else
