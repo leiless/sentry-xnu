@@ -298,6 +298,8 @@ static bool sentry_ctx_clear(void *handle)
  * @param ctx           Initial cJSON context(nullable)
  * @param sample_rate   Sample rate [0, 100]
  * @return              0 if success, errno otherwise
+ *
+ * TODO: implement an in-kernel gethostbyname()
  */
 int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sample_rate)
 {
@@ -479,6 +481,10 @@ static int format_event_data(
 
     kassert(!!buf || !buf_len);
 
+    /*
+     * NOET: sentry_client not enclose in X-Sentry-Auth, use User-Agent instead
+     * see: https://docs.sentry.io/development/sdk-dev/overview/#authentication
+     */
     n = snprintf(buf, buf_len,
             "POST /api/%llu/store/ HTTP/1.1\r\n"
             "Host: sentry.io\r\n"   /* TODO: should be DSN's endpoint */
