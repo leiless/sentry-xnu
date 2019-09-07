@@ -55,7 +55,8 @@ static int so_send_recv(
         }
 
         n += i;
-        if (!(flags & MSG_WAITALL)) break;
+        /* MSG_WAITALL should be use in socket receive operation */
+        if (!send && !(flags & MSG_WAITALL)) break;
     }
 
     if (e == 0 && !send && n < size) {

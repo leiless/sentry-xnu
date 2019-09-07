@@ -12,6 +12,9 @@
 
 #include "utils.h"
 
+/**
+ * Get unix time stamp in microseconds
+ */
 uint64_t utime(uint64_t * __nullable p)
 {
     clock_sec_t s;

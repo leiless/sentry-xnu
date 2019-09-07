@@ -107,7 +107,7 @@ static void sentry_post_message(socket_t so, const char *msg)
 
     t = utime(NULL);
     LOG_DBG("Sending..");
-    e = so_send(so, buf, strlen(buf), MSG_WAITALL);
+    e = so_send(so, buf, strlen(buf), 0);
     if (e != 0) {
         LOG_ERR("so_send() fail  errno: %d", e);
         return;

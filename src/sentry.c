@@ -202,6 +202,8 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         e = sock_getsockopt(so, SOL_SOCKET, SO_ERROR, &optval, &optlen);
         kassertf(e == 0, "[upcall] sock_getsockopt() SO_ERROR fail  errno: %d", e);
         LOG_ERR("[upcall] socket not connected  errno: %d", optval);
+
+        (void) OSBitAndAtomic(0, &handle->connected);
         return;
     } else {
         if (OSCompareAndSwap(0, 1, &handle->connected)) {
@@ -251,7 +253,7 @@ static void ctx_populate(cJSON *ctx)
     }
 
     /* see: https://docs.sentry.io/development/sdk-dev/event-payloads */
-    (void) cJSON_AddStringToObject(ctx, "logger", "(unspecified)");
+    (void) cJSON_AddStringToObject(ctx, "logger", "(internal)");
     (void) cJSON_AddStringToObject(ctx, "platform", "c");
 
     /* TODO: populate contexts */
@@ -496,15 +498,10 @@ out_toctou:
     if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, &e) == NULL) {
         LOG_DBG("cJSON_H_AddStringToObject() timestamp fail  errno: %d", e);
     }
-
-    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS | CJH_CONST_RHS | CJH_CREATE, "logger", "(internal)", &e) == NULL) {
-        if (e != EEXIST) LOG_DBG("cJSON_H_AddStringToObject() logger fail  errno: %d", e);
-    }
 #else
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, NULL);
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "event_id", uuid, NULL);
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, NULL);
-    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS | CJH_CONST_RHS | CJH_CREATE, "logger", "(internal)", NULL);
 #endif
 
     /* TODO: post message */
