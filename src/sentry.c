@@ -372,7 +372,7 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
 
     tv.tv_sec = 5;
     tv.tv_usec = 0;
-    e = so_common_options(h.so, tv, 1);
+    e = so_set_common_options(h.so, tv, 1);
     if (e != 0) {
 out_fail:
         so_destroy(h.so, SHUT_RDWR);
@@ -568,8 +568,13 @@ static void sentry_capture_message_ap(
     kassert_nonnull(fmt);
 
     if (!h->connected) {
-        //LOG_DBG("Handle %p isn't connected", h);
-        //return;
+        /*
+         * TODO:
+         *  we should push messages to a linked list if socket not yet ready?
+         *  and linger some time before socket got so_destroy()
+         */
+        LOG_WARN("Skip capture message since handle %p isn't connected", h);
+        return;
     }
 
     t = eid++;

@@ -4,7 +4,7 @@
 
 #include <mach/mach_types.h>
 #include <libkern/libkern.h>
-#include <netinet/in.h>         /* IPPROTO_IP */
+#include <netinet/in.h>         /* struct sockaddr_in */
 
 #include "utils.h"
 #include "sentry.h"
@@ -32,8 +32,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     } else {
         sentry_capture_message(handle, 0, "sentry handle: %p", handle);
 
-        /* Sleep some time  let the upcall got notified */
-        (void) usleep(1500 * USEC_PER_MSEC);
+        /* Sleep some time  so the message have chance to pushed out */
+        (void) usleep(1000 * USEC_PER_MSEC);
 
         sentry_destroy(handle);
     }
@@ -51,7 +51,6 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
-    LOG("unloading..");
     return KERN_SUCCESS;
 }
 

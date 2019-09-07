@@ -8,7 +8,7 @@
 #include "cJSON.h"
 
 #define SENTRY_XNU_NAME         "sentry-xnu"
-#define SENTRY_XNU_VERSION      "0.3"
+#define SENTRY_XNU_VERSION      "0.5"
 #define SENTRY_XNU_UA           SENTRY_XNU_NAME "/" SENTRY_XNU_VERSION
 
 /*

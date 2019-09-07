@@ -116,7 +116,7 @@ void so_destroy(socket_t __nullable so, int how)
  * @return      0 if success, errno otherwise
  *              errno result from sock_ioctl(), sock_setsockopt()
  */
-int so_common_options(socket_t so, struct timeval tv, int tcp_no_delay)
+int so_set_common_options(socket_t so, struct timeval tv, int tcp_no_delay)
 {
     int e;
     int arg;
