@@ -411,10 +411,82 @@ static void msg_set_level_attr(sentry_t *h, uint32_t flags)
 #endif
 }
 
+#define SENTRY_PROTO_VER    7           /* XXX: should be configurable */
+
+static int format_event_data(
+        const sentry_t *h,
+        const char *ctx,
+        size_t ctx_len,
+        char * __nullable buf,
+        size_t buf_len)
+{
+    int n;
+
+    kassert(!!buf || !buf_len);
+
+    n = snprintf(buf, buf_len,
+            "POST /api/%llu/store/ HTTP/1.1\r\n"
+            "Host: sentry.io\r\n"   /* TODO: should be DSN's endpoint */
+            "User-Agent: " SENTRY_XNU_UA "\r\n"
+            "X-Sentry-Auth: Sentry sentry_version=%u, sentry_timestamp=%lu, sentry_key=%s\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %zu\r\n"
+            "\r\n%s",
+            h->projid, SENTRY_PROTO_VER, time(NULL), h->pubkey, ctx_len, ctx);
+    kassertf(n > 0, "snprintf() fail  n: %d", n);
+    return n;
+}
+
+static void post_event(sentry_t *h)
+{
+    int n, n2;
+    char *ctx;
+    size_t ctx_len;
+    char *data;
+    int e;
+
+    kassert_nonnull(h);
+    /* Assure h->lck_rw must in exclusive-locked state */
+    kassert(!lck_rw_try_lock(h->lck_rw, LCK_RW_TYPE_EXCLUSIVE));
+
+    ctx = cJSON_Print(h->ctx);
+    if (ctx == NULL) {
+        LOG_ERR("cJSON_Print() fail");
+        return;
+    }
+    ctx_len = strlen(ctx);
+
+out_toctou:
+    n = format_event_data(h, ctx, ctx_len, NULL, 0);
+
+    data = util_malloc(n + 1);
+    if (data == NULL) {
+        /* TODO: we can fallback to use a giant buffer */
+        LOG_ERR("util_malloc() fail  size: %d", n);
+        util_zfree(ctx);
+        return;
+    }
+
+    n2 = format_event_data(h, ctx, ctx_len, data, n + 1);
+    if (n2 > n) {
+        util_mfree(data);
+        goto out_toctou;
+    }
+    n = n2; /* Correct n to its final value, in case we use it later */
+    kassertf((size_t) n == strlen(data), "Bad data length  %d vs %zu", n, strlen(data));
+
+    util_zfree(ctx);
+
+    e = so_send(h->so, data, n, 0);
+    if (e != 0) {
+        LOG_ERR("so_send() fail  errno: %d size: %d", e, n);
+    }
+}
+
 static void sentry_capture_message_ap(
-        void * __nonnull handle,
+        void *handle,
         uint32_t flags,
-        const char * __nonnull fmt,
+        const char *fmt,
         va_list ap_in)
 {
     static volatile uint64_t eid = 0, t;
@@ -429,6 +501,11 @@ static void sentry_capture_message_ap(
 
     kassert_nonnull(h);
     kassert_nonnull(fmt);
+
+    if (!h->connected) {
+        //LOG_DBG("Handle %p isn't connected", h);
+        //return;
+    }
 
     t = eid++;
     if (urand32(0, 100) >= h->sample_rate) {
@@ -511,6 +588,7 @@ out_toctou:
 #endif
 
     /* TODO: post message */
+    post_event(h);
 
     lck_rw_unlock_exclusive(h->lck_rw);
 
