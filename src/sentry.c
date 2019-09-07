@@ -193,15 +193,6 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     UNUSED(waitf);
 
     handle = (sentry_t *) cookie;
-    if (so != handle->so) {
-        uint64_t x, y;
-        x = (uint64_t) so;
-        y = (uint64_t) handle->so;
-        LOG_ERR("[upcall] Bad cookie  %#x%x vs %#x%x", (uint32_t) (x >> 32), (uint32_t) (x & 0xffffffff), (uint32_t) (y >> 32), (uint32_t) (y & 0xffffffff));
-        //LOG_ERR("[upcall] Bad cookie  %p vs %p", so, handle->so);
-        return;
-    }
-
     kassertf(so == handle->so, "[upcall] Bad cookie  %p vs %p", so, handle->so);
 
     if (!sock_isconnected(so)) {
@@ -361,6 +352,7 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
         lck_grp_free(h.lck_grp);
         goto out_exit;
     }
+    bzero(*handlep, sizeof(h));
 
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, *handlep, &h.so);
     if (e != 0) {
@@ -370,9 +362,11 @@ int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sampl
         lck_grp_free(h.lck_grp);
         goto out_exit;
     }
-    uint64_t x;
-    x = (uint64_t) h.so;
-    LOG_DBG(">>> %#x%x", (uint32_t) (x >> 32), (uint32_t) (x & 0xffffffff));
+    /*
+     * Set handle's socket early  otherwise upcall will panic
+     * see previous commit: 2c380fa4f120fd1161ed2965e4cbf469bec4f510
+     */
+    ((sentry_t *) *handlep)->so = h.so;
 
     tv.tv_sec = 5;
     tv.tv_usec = 0;
@@ -420,8 +414,6 @@ out_fail:
 #endif
 
     (void) memcpy(*handlep, &h, sizeof(h));
-    x = (uint64_t) ((sentry_t *) (*handlep))->so;
-    LOG_DBG(">>> %#x%x", (uint32_t) (x >> 32), (uint32_t) (x & 0xffffffff));
 
     sentry_debug(*handlep);
 
@@ -651,7 +643,6 @@ out_toctou:
     util_zfree(json);
 #endif
 
-    /* TODO: post message */
     post_event(h);
 
     lck_rw_unlock_exclusive(h->lck_rw);

@@ -63,7 +63,7 @@ static int so_send_recv(
         buf[n] = '\0';
     }
 
-    LOG_DBG("so_send_recv() %s size: %zu", send ? "send" : "recv", n);
+    LOG_DBG("so_send_recv()  %s size: %zu", send ? "SEND" : "RECV", n);
 
     return e;
 }

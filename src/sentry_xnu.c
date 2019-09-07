@@ -234,6 +234,10 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         LOG_ERR("sentry_new() fail  errno: %d", e);
     } else {
         sentry_capture_message(handle, 0, "sentry handle: %p", handle);
+
+        /* Sleep some time  let the upcall got notified */
+        (void) usleep(1500 * USEC_PER_MSEC);
+
         sentry_destroy(handle);
     }
 
@@ -310,10 +314,10 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     (void) snprintf(buf, sizeof(buf), "hello world! %u", random() % 100000);
     sentry_post_message(so, buf);
-#endif
 
     /* Sleep some time  let the upcall got notified */
     (void) usleep(1500 * USEC_PER_MSEC);
+#endif
 
 #if TEST_ENANBLE
 out_close:
