@@ -454,6 +454,7 @@ static void post_event(sentry_t *h)
         LOG_ERR("cJSON_Print() fail");
         return;
     }
+    cJSON_Minify(ctx);
     ctx_len = strlen(ctx);
 
 out_toctou:
@@ -481,6 +482,8 @@ out_toctou:
     if (e != 0) {
         LOG_ERR("so_send() fail  errno: %d size: %d", e, n);
     }
+
+    util_mfree(data);
 }
 
 static void sentry_capture_message_ap(
