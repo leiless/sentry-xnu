@@ -252,9 +252,9 @@ static void ctx_populate(cJSON *ctx)
         cJSON_AddItemToObjectCS(ctx, "sdk", sdk);
     }
 
+    (void) cJSON_AddStringToObject(ctx, "platform", "c");
     /* see: https://docs.sentry.io/development/sdk-dev/event-payloads */
     (void) cJSON_AddStringToObject(ctx, "logger", "(internal)");
-    (void) cJSON_AddStringToObject(ctx, "platform", "c");
 
     /* TODO: populate contexts */
     /* see: https://docs.sentry.io/development/sdk-dev/event-payloads/contexts */
@@ -482,10 +482,6 @@ out_toctou:
     msg_set_level_attr(h, flags);
 
 #ifdef DEBUG
-    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, &e) == NULL) {
-        LOG_ERR("cJSON_H_AddStringToObject() message fail  errno: %d", e);
-    }
-
     /*
      * [sic] Hexadecimal string representing a uuid4 value.
      * The length is exactly 32 characters. Dashes are not allowed.
@@ -498,10 +494,20 @@ out_toctou:
     if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, &e) == NULL) {
         LOG_DBG("cJSON_H_AddStringToObject() timestamp fail  errno: %d", e);
     }
+
+    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, &e) == NULL) {
+        LOG_ERR("cJSON_H_AddStringToObject() message fail  errno: %d", e);
+    }
 #else
-    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, NULL);
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "event_id", uuid, NULL);
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, NULL);
+    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, NULL);
+#endif
+
+#ifdef DEBUG
+    char *json = cJSON_Print(h->ctx);
+    LOG_DBG("%s", json);
+    util_zfree(json);
 #endif
 
     /* TODO: post message */

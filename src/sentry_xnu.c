@@ -227,6 +227,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     if (e != 0) {
         LOG_ERR("sentry_new() fail  errno: %d", e);
     } else {
+        sentry_capture_message(handle, 0, "sentry handle: %p", handle);
         sentry_destroy(handle);
     }
 
@@ -310,6 +311,8 @@ out_close:
     so_destroy(so, SHUT_RDWR);
     LOG_DBG("socket %p closed", so);
 out_exit:
+    util_massert();
+    util_zassert();
 #ifdef DEBUG
     return KERN_FAILURE;
 #else
