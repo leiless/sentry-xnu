@@ -404,10 +404,12 @@ out_fail:
         e = 0;
     }
 
+#if 1
     tv.tv_sec = 3;
     tv.tv_usec = 0;
     e = sock_connectwait(h.so, &tv);
     if (e != 0) LOG_ERR("sock_connectwait() fail  errno: %d", e);
+#endif
 #else
     e = sock_connect(h.so, (struct sockaddr *) &sin, 0);
     if (e != 0) goto out_fail;
@@ -536,6 +538,7 @@ out_toctou:
         LOG_ERR("so_send() fail  errno: %d size: %d", e, n);
     }
 
+    LOG_DBG("data:\n%s", data);
     util_mfree(data);
 }
 
@@ -635,12 +638,6 @@ out_toctou:
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "event_id", uuid, NULL);
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, NULL);
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, NULL);
-#endif
-
-#ifdef DEBUG
-    char *json = cJSON_Print(h->ctx);
-    LOG_DBG("%s", json);
-    util_zfree(json);
 #endif
 
     post_event(h);
