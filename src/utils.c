@@ -218,7 +218,7 @@ struct pseudo_tm {
  * @return          0 if success, errno otherwise.
  *                  EINVAL if buffer size less less than ISO8601_TM_BUFSZ
  */
-int format_iso8601_time(char *buf, size_t sz)
+int fmt_iso8601_time(char *buf, size_t sz)
 {
     int e = 0;
     clock_sec_t t;

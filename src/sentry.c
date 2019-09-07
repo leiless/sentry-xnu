@@ -14,6 +14,7 @@
 #include "sentry.h"
 #include "utils.h"
 #include "sock.h"
+#include "cJSON_Helper.h"
 
 #define UUID_BUFSZ              sizeof(uuid_string_t)
 /* UUID string buffer size without hyphens */
@@ -379,7 +380,7 @@ void sentry_destroy(void *handle)
     }
 }
 
-static const char * const sentry_levels[] = {
+static const char * const event_levels[] = {
     /* Default level is error */
     "error", "debug", "info", "warning", "fatal",
 };
@@ -388,15 +389,24 @@ static const char * const sentry_levels[] = {
 
 static void msg_set_level_attr(sentry_t *h, uint32_t flags)
 {
+    static uint32_t f = CJH_CONST_LHS | CJH_CONST_RHS;
     uint32_t i = FLAGS_TO_LEVEL(flags);
+#ifdef DEBUG
+    int e;
+#endif
+
     kassert_nonnull(h);
 
-    if (i < ARRAY_SIZE(sentry_levels)) {
-        /* TODO */
-    } else {
-        /* Correct to error level */
-        LOG_ERR("Bad Sentry event level: %u", i);
+    /* Correct to error level */
+    if (i >= ARRAY_SIZE(event_levels)) i = SEL_ERR;
+
+#ifdef DEBUG
+    if (cJSON_H_AddStringToObject(h->ctx, f, "level", event_levels[i], &e) == NULL) {
+        LOG_ERR("cJSON_H_AddStringToObject() level fail  errno: %d", e);
     }
+#else
+    (void) cJSON_H_AddStringToObject(h->ctx, f, "level", event_levels[i], NULL);
+#endif
 }
 
 static void sentry_capture_message_ap(
@@ -408,17 +418,15 @@ static void sentry_capture_message_ap(
     static volatile uint64_t eid = 0, t;
 
     sentry_t *h = (sentry_t *) handle;
-    uuid_string_t uu;
+    uuid_string_t uuid;
     char ts[ISO8601_TM_BUFSZ];
     va_list ap;
     int n, n2;
     char *msg;
+    int e;
 
     kassert_nonnull(h);
     kassert_nonnull(fmt);
-
-    UNUSED(flags, ap_in);
-    UNUSED(uu, ts, ap);
 
     t = eid++;
     if (urand32(0, 100) >= h->sample_rate) {
@@ -463,11 +471,43 @@ out_toctou:
         }
     }
 
-    /* TODO: Populate message context and send request */
+    uuid_string_generate(uuid);
+    e = fmt_iso8601_time(ts, sizeof(ts));
+    kassertf(e == 0, "fmt_iso8601_time() fail  errno: %d", e);
 
     lck_rw_lock_exclusive(h->lck_rw);
 
     msg_set_level_attr(h, flags);
+
+#ifdef DEBUG
+    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, &e) == NULL) {
+        LOG_ERR("cJSON_H_AddStringToObject() message fail  errno: %d", e);
+    }
+
+    /*
+     * [sic] Hexadecimal string representing a uuid4 value.
+     * The length is exactly 32 characters. Dashes are not allowed.
+     * XXX: as tested, uuid string with dashes is acceptable for Sentry server
+     */
+    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "event_id", uuid, &e) == NULL) {
+        LOG_DBG("cJSON_H_AddStringToObject() event_id fail  errno: %d", e);
+    }
+
+    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, &e) == NULL) {
+        LOG_DBG("cJSON_H_AddStringToObject() timestamp fail  errno: %d", e);
+    }
+
+    if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS | CJH_CONST_RHS | CJH_CREATE, "logger", "(internal)", &e) == NULL) {
+        if (e != EEXIST) LOG_DBG("cJSON_H_AddStringToObject() logger fail  errno: %d", e);
+    }
+#else
+    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, NULL);
+    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "event_id", uuid, NULL);
+    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, NULL);
+    (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS | CJH_CONST_RHS | CJH_CREATE, "logger", "(internal)", NULL);
+#endif
+
+    /* TODO: post message */
 
     lck_rw_unlock_exclusive(h->lck_rw);
 

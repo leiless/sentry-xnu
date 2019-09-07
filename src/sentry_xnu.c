@@ -61,7 +61,7 @@ static void format_message_payload(
     kassert(sz != 0);
 
     uuid_string_generate(u);
-    format_iso8601_time(t, sizeof(t));
+    fmt_iso8601_time(t, sizeof(t));
 
     n = snprintf(buf, sz,
             "{\"event_id\":\"%s\","

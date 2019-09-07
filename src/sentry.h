@@ -15,7 +15,7 @@
  * Most significant 3 bits denoted Sentry Event Level
  * Hence at most 8 levels can be supported
  */
-#define SEL_ERR     0x00000000u     /* (duh) Default level */
+#define SEL_ERR     0x00000000u     /* (dummy) Default level */
 #define SEL_DBG     0x20000000u
 #define SEL_INF     0x40000000u
 #define SEL_WRN     0x60000000u
