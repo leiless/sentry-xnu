@@ -312,3 +312,11 @@ uint32_t urand32(uint32_t lo, uint32_t hi)
     return lo + u % (hi - lo);
 }
 
+/* version is a string of the following form, as returned by uname -v:
+ * "Darwin Kernel Version <osrelease>: <build date>; <osbuilder>:<build root>"
+ */
+void parse_os_version(void)
+{
+    /* TODO: */
+}
+

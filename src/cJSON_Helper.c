@@ -91,3 +91,66 @@ out_exit:
     return str_item;
 }
 
+/**
+ * Better implementation of cJSON_AddNumberToObject()
+ */
+cJSON * __nullable cJSON_H_AddNumberToObject(
+        cJSON * const obj,
+        uint32_t flags,
+        const char * const name,
+        double number,
+        int * __nullable error)
+{
+    cJSON *num_item = NULL;
+    cJSON *found;
+
+    kassert_nonnull(obj);
+    kassert_nonnull(name);
+
+    found = cJSON_GetObjectItem(obj, name);
+
+    if ((flags & CJH_CREATE) && found) {
+        if (error != NULL) *error = EEXIST;
+        goto out_exit;
+    }
+
+    if ((flags & CJH_REPLACE) && !found) {
+        if (error != NULL) *error = ENOENT;
+        goto out_exit;
+    }
+
+    num_item = cJSON_CreateNumber(number);
+    if (unlikely(num_item == NULL)) {
+        if (error != NULL) *error = ENOMEM;
+        goto out_exit;
+    }
+
+    if (flags & CJH_CONST_LHS) {
+        if ((flags & CJH_REPLACE) || found) {
+            cJSON_ReplaceItemInObject(obj, name, num_item);
+        } else {
+            /* cJSON_AddItemToObjectCS() always success if `name' key is constant */
+            cJSON_AddItemToObjectCS(obj, name, num_item);
+        }
+    } else {
+        if ((flags & CJH_REPLACE) || found) {
+            cJSON_ReplaceItemInObject(obj, name, num_item);
+        } else {
+            cJSON_AddItemToObject(obj, name, num_item);
+
+            /* cJSON_AddItemToObject()'s call to cJSON_strdup() may fail */
+            found = cJSON_GetObjectItem(obj, name);
+            if (!found) {
+                cJSON_Delete(num_item);
+                num_item = NULL;
+                if (error != NULL) *error = ENOMEM;
+                goto out_exit;
+            }
+            kassertf(found == num_item, "Concurrent update for name = '%s'?!  %p vs %p", name, found, num_item);
+        }
+    }
+
+out_exit:
+    return num_item;
+}
+

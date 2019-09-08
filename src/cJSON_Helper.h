@@ -23,7 +23,15 @@ cJSON * __nullable cJSON_H_AddStringToObject(
     uint32_t,
     const char * __nonnull const,
     const char * __nonnull const,
-    int * __nullable error
+    int * __nullable
+);
+
+cJSON * __nullable cJSON_H_AddNumberToObject(
+    cJSON *  __nonnull const,
+    uint32_t,
+    const char *  __nonnull const,
+    double,
+    int * __nullable
 );
 
 #endif /* cJSON_HELPER_H */

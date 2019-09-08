@@ -7,6 +7,8 @@
 #include <sys/errno.h>
 #include <libkern/libkern.h>
 #include <libkern/OSAtomic.h>
+#include <libkern/sysctl.h>
+#include <libkern/version.h>
 #include <uuid/uuid.h>
 #include <kern/locks.h>
 #include <netinet/in.h>
@@ -239,16 +241,128 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     }
 }
 
+void sysctlbyname_size(const char *name)
+{
+    size_t sz = SIZE_T_MAX;
+    int e;
+    kassert_nonnull(name);
+    e = sysctlbyname(name, NULL, &sz, NULL, 0);
+    if (e != 0) {
+        LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
+    } else {
+        LOG_DBG("sysctl %s size: %zu", name, sz);
+    }
+}
+
+static bool sysctlbyname_i32(const char *name, int *out)
+{
+    int e;
+    size_t len = 4;
+    kassert_nonnull(name);
+    kassert_nonnull(out);
+    e = sysctlbyname(name, out, &len, NULL, 0);
+    if (e != 0) {
+        LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
+    } else {
+        kassertf(len == 4, "bad sysctl %s len  expected 4, got %zu", name, len);
+    }
+    return e == 0;
+}
+
+static bool sysctlbyname_u64(const char *name, uint64_t *u64)
+{
+    int e;
+    size_t len = sizeof(*u64);
+    kassert_nonnull(name);
+    kassert_nonnull(u64);
+    e = sysctlbyname(name, u64, &len, NULL, 0);
+    if (e != 0) {
+        LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
+    } else {
+        kassertf(len == sizeof(*u64), "bad sysctl %s len  expected %zu, got %zu", name, sizeof(*u64), len);
+    }
+    return e == 0;
+}
+
+static bool sysctlbyname_string(const char *name, char *buf, size_t buflen)
+{
+    int e;
+    kassert_nonnull(name);
+    kassert_nonnull(buf);
+    e = sysctlbyname(name, buf, &buflen, NULL, 0);
+    if (e != 0) LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
+    return e == 0;
+}
+
+#define SYSCTL_BUFSZ    144     /* Should be enough */
+
 static void ctx_populate(cJSON *ctx)
 {
+    cJSON *contexts;
+    cJSON *device;
+    //cJSON *os;
+    char str[SYSCTL_BUFSZ];
+    int i32;
+    uint64_t u64;
+
     kassert_nonnull(ctx);
 
     (void) cJSON_AddStringToObject(ctx, "platform", "c");
     /* see: https://docs.sentry.io/development/sdk-dev/event-payloads */
     (void) cJSON_AddStringToObject(ctx, "logger", "(internal)");
 
-    /* TODO: populate contexts */
     /* see: https://docs.sentry.io/development/sdk-dev/event-payloads/contexts */
+
+    contexts = cJSON_AddObjectToObject(ctx, "contexts");
+    if (contexts == NULL) {
+        LOG_ERR("cJSON_AddObjectToObject() contexts fail");
+        return;
+    }
+
+    device = cJSON_AddObjectToObject(contexts, "device");
+    if (device != NULL) {
+        /*
+         * kext environment doesn't expose hostname to us
+         *  sysctlbyname("kern.hostname") return errno EPERM
+         *  bsd_hostname() in com.apple.kpi.private framework
+         * thus we skip set device.name
+         * see: xnu/libkern/libkern/sysctl.h#kernel_sysctlbyname()
+         */
+
+        if (sysctlbyname_i32("hw.byteorder", &i32)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.byteorder", i32, NULL);
+        }
+
+        if (sysctlbyname_i32("hw.logicalcpu", &i32)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.logicalcpu", i32, NULL);
+        }
+
+        if (sysctlbyname_i32("hw.physicalcpu", &i32)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.physicalcpu", i32, NULL);
+        }
+
+        if (sysctlbyname_i32("hw.ncpu", &i32)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.ncpu", i32, NULL);
+        }
+
+        if (sysctlbyname_u64("hw.cpufrequency", &u64)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.cpufrequency", u64, NULL);
+        }
+
+        if (sysctlbyname_u64("hw.memsize", &u64)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
+        }
+
+        if (sysctlbyname_u64("hw.pagesize", &u64)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.pagesize", u64, NULL);
+        }
+
+        if (sysctlbyname_string("hw.model", str, sizeof(str))) {
+            (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "model", str, NULL);
+        }
+
+        /* device.arch is ignored, it'll be fill in os context */
+    }
 }
 
 /**
