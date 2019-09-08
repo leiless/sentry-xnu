@@ -32,6 +32,8 @@ typedef struct {
 
     uuid_t last_event_id;
     cJSON * __nonnull ctx;
+    send_hook_func hook[2];
+    void *cookie[2];
 
     lck_grp_t * __nonnull lck_grp;
     lck_rw_t * __nonnull lck_rw;
@@ -449,7 +451,7 @@ static void msg_set_level_attr(sentry_t *h, uint32_t flags)
     kassert_nonnull(h);
 
     /* Correct to error level */
-    if (i >= ARRAY_SIZE(event_levels)) i = SEL_ERR;
+    if (i >= ARRAY_SIZE(event_levels)) i = 0;
 
 #ifdef DEBUG
     if (cJSON_H_AddStringToObject(h->ctx, f, "level", event_levels[i], &e) == NULL) {
@@ -489,6 +491,9 @@ static int format_event_data(
     kassertf(n > 0, "snprintf() fail  n: %d", n);
     return n;
 }
+
+#define PRE_HOOK            0
+#define POST_HOOK           1
 
 static void post_event(sentry_t *h)
 {
@@ -531,6 +536,10 @@ out_toctou:
 
     util_zfree(ctx);
 
+    if (h->hook[PRE_HOOK] != NULL) {
+        h->hook[PRE_HOOK](h, h->ctx, h->cookie[PRE_HOOK]);
+    }
+
     e = so_send(h->so, data, n, 0);
     if (e != 0) {
         LOG_ERR("so_send() fail  errno: %d size: %d", e, n);
@@ -538,9 +547,13 @@ out_toctou:
 
     LOG_DBG("data:\n%s", data);
     util_mfree(data);
+
+    if (h->hook[POST_HOOK] != NULL) {
+        h->hook[POST_HOOK](h, h->ctx, h->cookie[POST_HOOK]);
+    }
 }
 
-static void sentry_capture_message_ap(
+static void capture_message_ap(
         void *handle,
         uint32_t flags,
         const char *fmt,
@@ -654,7 +667,44 @@ void sentry_capture_message(void *handle, uint32_t flags, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    sentry_capture_message_ap(handle, flags, fmt, ap);
+    capture_message_ap(handle, flags, fmt, ap);
     va_end(ap);
+}
+
+static void set_send_hook(
+        void *handle,
+        send_hook_func hook,
+        void *cookie,
+        uint32_t index)
+{
+    sentry_t *h = (sentry_t *) handle;
+    kassert_nonnull(h);
+    kassertf(index < ARRAY_SIZE(h->hook), "Bad index %u", index);
+    lck_rw_lock_exclusive(h->lck_rw);
+    h->hook[index] = hook;
+    h->cookie[index] = hook ? cookie : NULL;
+    lck_rw_unlock_exclusive(h->lck_rw);
+}
+
+/**
+ * Set pre event send hook
+ * @param hook      Event send hook
+ * @param cookie    Param pass to event send hook
+ *                  When hook is NULL(deregister), cookie will be ignored
+ */
+void sentry_set_pre_send_hook(
+        void *handle,
+        send_hook_func hook,
+        void *cookie)
+{
+    set_send_hook(handle, hook, cookie, PRE_HOOK);
+}
+
+void sentry_set_post_send_hook(
+    void *handle,
+    send_hook_func hook,
+    void *cookie)
+{
+    set_send_hook(handle, hook, cookie, POST_HOOK);
 }
 

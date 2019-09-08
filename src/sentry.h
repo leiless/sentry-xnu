@@ -39,5 +39,23 @@ void sentry_capture_message(
     ...
 );
 
+typedef void (*send_hook_func)(
+    void * __nonnull,
+    cJSON * __nonnull,
+    void * __nullable
+);
+
+void sentry_set_pre_send_hook(
+    void * __nonnull,
+    send_hook_func __nullable,
+    void * __nullable
+);
+
+void sentry_set_post_send_hook(
+    void * __nonnull,
+    send_hook_func __nullable,
+    void * __nullable
+);
+
 #endif /* SENTRY_H */
 
