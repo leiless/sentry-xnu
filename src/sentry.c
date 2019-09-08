@@ -241,18 +241,7 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
 
 static void ctx_populate(cJSON *ctx)
 {
-    cJSON *sdk;
-
     kassert_nonnull(ctx);
-
-    /* see: https://docs.sentry.io/development/sdk-dev/event-payloads/sdk */
-    sdk = cJSON_CreateObject();
-    if (sdk != NULL) {
-        /* name, version both must required */
-        (void) cJSON_AddStringToObject(sdk, "name", SENTRY_XNU_NAME);
-        (void) cJSON_AddStringToObject(sdk, "version", SENTRY_XNU_VERSION);
-        cJSON_AddItemToObjectCS(ctx, "sdk", sdk);
-    }
 
     (void) cJSON_AddStringToObject(ctx, "platform", "c");
     /* see: https://docs.sentry.io/development/sdk-dev/event-payloads */
