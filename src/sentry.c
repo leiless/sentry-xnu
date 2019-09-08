@@ -301,93 +301,69 @@ static bool sentry_ctx_clear(void *handle)
  *
  * TODO: implement an in-kernel gethostbyname()
  */
-int sentry_new(void **handlep, const char *dsn, const cJSON *ctx, uint32_t sample_rate)
+int sentry_new(
+        void **handlep,
+        const char *dsn,
+        const cJSON *ctx,
+        uint32_t sample_rate)
 {
     int e = 0;
-    sentry_t h;
+    sentry_t *h;
     struct timeval tv;
     struct sockaddr_in sin;
 
-    UNUSED(ctx);
+    UNUSED(ctx);    /* TODO */
 
     if (handlep == NULL || dsn == NULL || sample_rate > 100) {
         e = EINVAL;
         goto out_exit;
     }
 
-    *handlep = NULL;
-    bzero(&h, sizeof(h));
+    h = util_malloc(sizeof(*h));
+    if (h == NULL) {
+        e = ENOMEM;
+        goto out_oom;
+    }
+    bzero(h, sizeof(*h));
 
-    if (!parse_dsn(&h, dsn)) {
+    if (!parse_dsn(h, dsn)) {
         e = EDOM;
-        goto out_exit;
+        goto out_free;
     }
 
-    h.sample_rate = sample_rate;
+    h->sample_rate = sample_rate;
 
     /* lck_grp_name is a dummy placeholder */
-    h.lck_grp = lck_grp_alloc_init("", LCK_GRP_ATTR_NULL);
-    if (h.lck_grp == NULL) {
+    h->lck_grp = lck_grp_alloc_init("", LCK_GRP_ATTR_NULL);
+    if (h->lck_grp == NULL) {
         e = ENOMEM;
-        goto out_exit;
+        goto out_free;
     }
 
-    h.lck_rw = lck_rw_alloc_init(h.lck_grp, LCK_ATTR_NULL);
-    if (h.lck_rw == NULL) {
+    h->lck_rw = lck_rw_alloc_init(h->lck_grp, LCK_ATTR_NULL);
+    if (h->lck_rw == NULL) {
         e = ENOMEM;
-        lck_grp_free(h.lck_grp);
-        goto out_exit;
+        goto out_lck_grp;
     }
 
-    if (!sentry_ctx_clear(&h)) {
+    if (!sentry_ctx_clear(h)) {
         e = ENOMEM;
-        lck_rw_free(h.lck_rw, h.lck_grp);
-        lck_grp_free(h.lck_grp);
-        goto out_exit;
+        goto out_lck_rw;
     }
 
-    *handlep = util_malloc(sizeof(h));
-    if (*handlep == NULL) {
-        e = ENOMEM;
-        cJSON_Delete(h.ctx);
-        lck_rw_free(h.lck_rw, h.lck_grp);
-        lck_grp_free(h.lck_grp);
-        goto out_exit;
-    }
-    bzero(*handlep, sizeof(h));
-
-    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, *handlep, &h.so);
-    if (e != 0) {
-        util_mfree(*handlep);
-        cJSON_Delete(h.ctx);
-        lck_rw_free(h.lck_rw, h.lck_grp);
-        lck_grp_free(h.lck_grp);
-        goto out_exit;
-    }
-    /*
-     * Set handle's socket early  otherwise upcall will panic
-     * see previous commit: 2c380fa4f120fd1161ed2965e4cbf469bec4f510
-     */
-    ((sentry_t *) *handlep)->so = h.so;
+    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, h, &h->so);
+    if (e != 0) goto out_cjson;
 
     tv.tv_sec = 5;
     tv.tv_usec = 0;
-    e = so_set_common_options(h.so, tv, 1);
-    if (e != 0) {
-out_fail:
-        so_destroy(h.so, SHUT_RDWR);
-        util_mfree(*handlep);
-        cJSON_Delete(h.ctx);
-        lck_rw_free(h.lck_rw, h.lck_grp);
-        lck_grp_free(h.lck_grp);
-        goto out_exit;
-    }
+    e = so_set_common_options(h->so, tv, 1);
+    if (e != 0) goto out_socket;
 
     bzero(&sin, sizeof(sin));
     /*
      * XXX:
      *  (struct sockaddr).sin_len must be sizeof(struct sockaddr)
-     *  otherwise sock_connect will return EINVAL
+     *  otherwise sock_connect() will return EINVAL
      *
      * see:
      *  xnu/bsd/kern/kpi_socket.c#sock_connect
@@ -396,33 +372,49 @@ out_fail:
      */
     sin.sin_len = sizeof(sin);
     sin.sin_family = PF_INET;
-    sin.sin_port = htons(h.port);
-    sin.sin_addr = h.ip;
+    sin.sin_port = htons(h->port);
+    sin.sin_addr = h->ip;
 
 #if 1
-    e = sock_connect(h.so, (struct sockaddr *) &sin, MSG_DONTWAIT);
+    e = sock_connect(h->so, (struct sockaddr *) &sin, MSG_DONTWAIT);
     if (e != 0) {
-        if (e != EINPROGRESS) goto out_fail;
-        e = 0;
+        if (e != EINPROGRESS) goto out_socket;
+        e = 0;  /* Reset when errno = EINPROGRESS */
     }
 
 #if 1
     tv.tv_sec = 3;
     tv.tv_usec = 0;
-    e = sock_connectwait(h.so, &tv);
-    if (e != 0) LOG_ERR("sock_connectwait() fail  errno: %d", e);
+    e = sock_connectwait(h->so, &tv);
+    if (e != 0) {
+        LOG_ERR("sock_connectwait() fail  errno: %d", e);
+        e = 0;  /* Reset errno */
+    }
 #endif
 #else
-    e = sock_connect(h.so, (struct sockaddr *) &sin, 0);
-    if (e != 0) goto out_fail;
+    e = sock_connect(h->so, (struct sockaddr *) &sin, 0);
+    if (e != 0) goto out_socket;
 #endif
 
-    (void) memcpy(*handlep, &h, sizeof(h));
+    sentry_debug(h);
+    *handlep = h;
 
-    sentry_debug(*handlep);
-
+    kassertf(e == 0, "expected errno == 0, got %d", e);
 out_exit:
     return e;
+out_socket:
+    so_destroy(h->so, SHUT_RDWR);
+out_cjson:
+    cJSON_Delete(h->ctx);
+out_lck_rw:
+    lck_rw_free(h->lck_rw, h->lck_grp);
+out_lck_grp:
+    lck_grp_free(h->lck_grp);
+out_free:
+    util_mfree(h);
+out_oom:
+    kassertf(e != 0, "expected errno != 0, got 0");
+    goto out_exit;
 }
 
 void sentry_destroy(void *handle)
