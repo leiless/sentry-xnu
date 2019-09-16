@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #include <sys/errno.h>
+#include <sys/vnode.h>
+#include <sys/mount.h>
 #include <libkern/libkern.h>
 #include <libkern/OSAtomic.h>
 #include <libkern/sysctl.h>
@@ -294,16 +296,51 @@ static bool sysctlbyname_string(const char *name, char *buf, size_t buflen)
     return e == 0;
 }
 
+/**
+ * Get information about filesystem status backed by root vnode
+ * @param out_st    [OUT] filesystem status
+ * @return          0 if success
+ *                  ENOENT [sic] if the vnode is dead and without existing io-reference
+ */
+static errno_t vfsstatfs_root(struct vfsstatfs *out_st)
+{
+    errno_t e = 0;
+    vnode_t __nullable rootvn;
+    mount_t mnt;
+    struct vfsstatfs *st = NULL;
+
+    kassert_nonnull(out_st);
+
+    rootvn = vfs_rootvnode();
+    if (rootvn != NULL) {
+        mnt = vnode_mount(rootvn);
+        st = vfs_statfs(mnt);
+
+        /* Perform atomic vfsstatfs snapshot */
+        do {
+            (void) memcpy(out_st, st, sizeof(*st));
+        } while (memcmp(out_st, st, sizeof(*st)));
+
+        (void) vnode_put(rootvn);
+    } else {
+        e = ENOENT;
+    }
+
+    return e;
+}
+
 #define SYSCTL_BUFSZ    144     /* Should be enough */
 
 static void ctx_populate(cJSON *ctx)
 {
+    errno_t e;
     cJSON *contexts;
     cJSON *device;
     //cJSON *os;
     char str[SYSCTL_BUFSZ];
     int i32;
     uint64_t u64;
+    struct vfsstatfs st;
 
     kassert_nonnull(ctx);
 
@@ -352,6 +389,18 @@ static void ctx_populate(cJSON *ctx)
         if (sysctlbyname_u64("hw.memsize", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
         }
+        /* TODO: free_memory, usable_memory */
+
+        e = vfsstatfs_root(&st);
+        if (e == 0) {
+            u64 = st.f_bsize * st.f_blocks;
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "storage_size", u64, NULL);
+
+            u64 = st.f_bsize * st.f_bavail;
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "free_storage", u64, NULL);
+        } else {
+            LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
+        }
 
         if (sysctlbyname_u64("hw.pagesize", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.pagesize", u64, NULL);
@@ -362,6 +411,8 @@ static void ctx_populate(cJSON *ctx)
         }
 
         /* device.arch is ignored, it'll be fill in os context */
+
+        /* TODO: boot_time */
     }
 }
 
