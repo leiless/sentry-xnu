@@ -216,15 +216,15 @@ struct pseudo_tm {
 
 /**
  * Format an ISO-8601 datetime without trailing time zone
+ * @param t         UNIX time stamp in seconds
  * @param buf       Output buffer
- * @param sz        buffer size
+ * @param sz        Buffer size
  * @return          0 if success, errno otherwise.
  *                  EINVAL if buffer size less less than ISO8601_TM_BUFSZ
  */
-int fmt_iso8601_time(char *buf, size_t sz)
+int fmt_iso8601_time0(clock_sec_t t, char *buf, size_t sz)
 {
     int e = 0;
-    clock_sec_t t;
     struct pseudo_tm tm;
     uint32_t i;
     const uint32_t *p;
@@ -235,8 +235,6 @@ int fmt_iso8601_time(char *buf, size_t sz)
         e = EINVAL;
         goto out_exit;
     }
-
-    t = time(NULL);
 
     tm.sec = (uint32_t) t % EPOCH_MINUTE_SECS;
     t -= tm.sec;
@@ -276,6 +274,14 @@ int fmt_iso8601_time(char *buf, size_t sz)
 
 out_exit:
     return e;
+}
+
+/**
+ * see: fmt_iso8601_time0()
+ */
+int fmt_iso8601_time(char *buf, size_t sz)
+{
+    return fmt_iso8601_time0(time(NULL), buf, sz);
 }
 
 void uuid_string_generate(uuid_string_t out)

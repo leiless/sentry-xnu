@@ -142,6 +142,7 @@ clock_sec_t time(clock_sec_t * __nullable);
 void uuid_string_generate(uuid_string_t __nonnull);
 
 #define ISO8601_TM_BUFSZ    20u
+int fmt_iso8601_time0(clock_sec_t, char * __nonnull, size_t);
 int fmt_iso8601_time(char * __nonnull, size_t);
 
 double pseudo_strtod(

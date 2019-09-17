@@ -341,6 +341,9 @@ static void ctx_populate(cJSON *ctx)
     int i32;
     uint64_t u64;
     struct vfsstatfs st;
+    struct timeval tv;
+    size_t sz;
+    char ts[ISO8601_TM_BUFSZ];
 
     kassert_nonnull(ctx);
 
@@ -378,10 +381,6 @@ static void ctx_populate(cJSON *ctx)
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.physicalcpu", i32, NULL);
         }
 
-        if (sysctlbyname_i32("hw.ncpu", &i32)) {
-            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.ncpu", i32, NULL);
-        }
-
         if (sysctlbyname_u64("hw.cpufrequency", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.cpufrequency", u64, NULL);
         }
@@ -412,7 +411,16 @@ static void ctx_populate(cJSON *ctx)
 
         /* device.arch is ignored, it'll be fill in os context */
 
-        /* TODO: boot_time */
+        bzero(&tv, sizeof(tv));
+        sz = sizeof(tv);
+        e = sysctlbyname("kern.boottime", &tv, &sz, NULL, 0);
+        if (e == 0) {
+            kassertf(sz == sizeof(tv), "Bad kern.boottime size  %zu vs %zu", sz, sizeof(tv));
+            e = fmt_iso8601_time0(tv.tv_sec, ts, sizeof(ts));
+            kassertf(e == 0, "fmt_iso8601_time0() fail  errno: %d", e);
+
+            (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "boot_time", ts, NULL);
+        }
     }
 }
 
