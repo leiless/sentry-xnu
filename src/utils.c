@@ -6,8 +6,8 @@
 #include <sys/proc.h>
 
 #include <kern/clock.h>
-#include <libkern/OSAtomic.h>
 
+#include <libkern/OSAtomic.h>
 #include <libkern/crypto/rand.h>
 
 #include "utils.h"
@@ -316,13 +316,5 @@ uint32_t urand32(uint32_t lo, uint32_t hi)
      */
     if (e != 0) u = random();
     return lo + u % (hi - lo);
-}
-
-/* version is a string of the following form, as returned by uname -v:
- * "Darwin Kernel Version <osrelease>: <build date>; <osbuilder>:<build root>"
- */
-void parse_os_version(void)
-{
-    /* TODO: */
 }
 

@@ -336,7 +336,7 @@ static void ctx_populate(cJSON *ctx)
     errno_t e;
     cJSON *contexts;
     cJSON *device;
-    //cJSON *os;
+    cJSON *os;
     char str[SYSCTL_BUFSZ];
     int i32;
     uint64_t u64;
@@ -421,6 +421,14 @@ static void ctx_populate(cJSON *ctx)
 
             (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "boot_time", ts, NULL);
         }
+    }
+
+    os = cJSON_AddObjectToObject(contexts, "os");
+    if (os != NULL) {
+        (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "name", ostype, NULL);
+        (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "version", osrelease, NULL);
+        (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "kernel_version", version, NULL);
+        /* TODO: os.build, os.rooted, os.raw_description */
     }
 }
 
