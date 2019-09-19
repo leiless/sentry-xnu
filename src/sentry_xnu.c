@@ -26,7 +26,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     e = sentry_new(&handle,
             "HttP://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302",
-            NULL, 100);
+            NULL, 100 ,ki);
     if (e != 0) {
         LOG_ERR("sentry_new() fail  errno: %d", e);
     } else {

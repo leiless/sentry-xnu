@@ -25,7 +25,8 @@ int sentry_new(
     void * __nullable * __nonnull,
     const char * __nonnull,
     const cJSON * __nullable,
-    uint32_t
+    uint32_t,
+    kmod_info_t * __nullable
 );
 
 void sentry_debug(void * __nonnull);

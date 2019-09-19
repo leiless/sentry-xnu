@@ -329,9 +329,50 @@ static errno_t vfsstatfs_root(struct vfsstatfs *out_st)
     return e;
 }
 
+#define PTR_BUFSZ       19
+
+static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
+{
+    cJSON *kext;
+    char buf[PTR_BUFSZ];
+
+    kassert_nonnull(contexts);
+    if (ki == NULL) return;
+
+    kext = cJSON_AddObjectToObject(contexts, "kext");
+    if (kext == NULL) return;
+
+    (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "info_version", ki->info_version, NULL);
+    (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "id", ki->id, NULL);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "name", ki->name, NULL);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "version", ki->version, NULL);
+
+    /* XXX: ki->reference_count is variable */
+    (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "ref_count", ki->reference_count, NULL);
+
+    /* TODO: reference_list */
+
+    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->address);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "address_begin", buf, NULL);
+
+    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->address + ki->size);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "address_end", buf, NULL);
+
+    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->size);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "size", buf, NULL);
+
+    (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "hdr_size", ki->hdr_size, NULL);
+
+    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->start);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func_start", buf, NULL);
+
+    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->stop);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func_stop", buf, NULL);
+}
+
 #define SYSCTL_BUFSZ    144     /* Should be enough */
 
-static void ctx_populate(cJSON *ctx)
+static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 {
     errno_t e;
     cJSON *contexts;
@@ -430,13 +471,15 @@ static void ctx_populate(cJSON *ctx)
         (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "kernel_version", version, NULL);
         /* TODO: os.build, os.rooted, os.raw_description */
     }
+
+    ctx_populate_kmod_info(contexts, ki);
 }
 
 /**
  * Reinitialize json context of a Sentry handle
  * @return      true if success, false otherwise
  */
-static bool sentry_ctx_clear(void *handle)
+static bool sentry_ctx_clear(void *handle, kmod_info_t * __nullable ki)
 {
     sentry_t *h = (sentry_t *) handle;
     cJSON *ctx0, *ctx1;
@@ -446,7 +489,7 @@ static bool sentry_ctx_clear(void *handle)
     ctx1 = cJSON_CreateObject();
     if (ctx1 == NULL) return false;
 
-    ctx_populate(ctx1);
+    ctx_populate(ctx1, ki);
 
     lck_rw_lock_exclusive(h->lck_rw);
     ctx0 = h->ctx;
@@ -477,7 +520,8 @@ int sentry_new(
         void **handlep,
         const char *dsn,
         const cJSON *ctx,
-        uint32_t sample_rate)
+        uint32_t sample_rate,
+        kmod_info_t * __nullable ki)
 {
     int e = 0;
     sentry_t *h;
@@ -518,7 +562,7 @@ int sentry_new(
         goto out_lck_grp;
     }
 
-    if (!sentry_ctx_clear(h)) {
+    if (!sentry_ctx_clear(h, ki)) {
         e = ENOMEM;
         goto out_lck_rw;
     }
