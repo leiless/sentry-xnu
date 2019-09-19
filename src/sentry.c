@@ -335,6 +335,9 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
 {
     cJSON *kext;
     char buf[PTR_BUFSZ];
+    kmod_reference_t *kr;
+    size_t i, n;
+    char *p;
 
     kassert_nonnull(contexts);
     if (ki == NULL) return;
@@ -350,7 +353,30 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     /* XXX: ki->reference_count is variable */
     (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "ref_count", ki->reference_count, NULL);
 
-    /* TODO: reference_list */
+    n = 0;
+    kr = ki->reference_list;
+    while (kr != NULL) {
+        kassert_nonnull(kr->info);
+        n += snprintf(NULL, 0, "%u: %s (%s)\n", kr->info->id, kr->info->name, kr->info->version);
+        kr = kr->next;
+    }
+
+    if (n > 0) {
+        p = util_malloc(n + 1);
+        if (p != NULL) {
+            kr = ki->reference_list;
+            i = 0;
+            while (kr != NULL && i < n) {
+                kassert_nonnull(kr->info);
+                i += snprintf(p + i, n - i, "%u: %s (%s)\n", kr->info->id, kr->info->name, kr->info->version);
+                kr = kr->next;
+            }
+            kassert(kr == NULL);
+            kassertf(i == n, "Bad index  %zu vs %zu", i, n);
+            (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "ref_list", p, NULL);
+            util_mfree(p);
+        }
+    }
 
     (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->address);
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "address_begin", buf, NULL);
