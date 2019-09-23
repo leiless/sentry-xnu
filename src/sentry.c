@@ -19,6 +19,7 @@
 #include "utils.h"
 #include "sock.h"
 #include "cJSON_Helper.h"
+#include "macho.h"
 
 #define UUID_BUFSZ              sizeof(uuid_string_t)
 /* UUID string buffer size without hyphens */
@@ -394,6 +395,14 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
 
     (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->stop);
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func_stop", buf, NULL);
+
+    uuid_string_t uu;
+    errno_t e = find_LC_UUID(ki->address, ki->size, MACHO_SET_UUID_FAIL, uu);
+    if (e == 0) {
+        (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "LC_UUID", uu, NULL);
+    } else {
+        LOG_ERR("find_LC_UUID() fail  errno: %d", e);
+    }
 }
 
 #define SYSCTL_BUFSZ    144     /* Should be enough */

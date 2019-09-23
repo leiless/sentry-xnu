@@ -103,6 +103,8 @@
 
 #define kassert_nonnull(ptr)    kassert(ptr != NULL)
 
+#define kassert_eq(v1, v2)      kassertf(v1 == v2, "%zd vs %zd", (ssize_t) v1, (ssize_t) v2)
+
 /*
  * non DEVELOPMENT/DEBUG kernel(s) will hide kernel addresses since macOS 10.11
  * see: xnu/osfmk/kern/printf.c#doprnt_hide_pointers
