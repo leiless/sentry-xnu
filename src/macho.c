@@ -15,17 +15,13 @@ typedef struct {
     size_t size;
 } buffer_t;
 
-static void *macho_read(buffer_t *buf, void *addr, size_t size)
+static void *macho_read(buffer_t *buf, vm_offset_t offset, size_t size)
 {
     kassert_nonnull(buf);
-    kassert_nonnull(addr);
-
-    if (((uint8_t *) addr - (uint8_t *) buf->data) + size <= + buf->size)
-        return addr;
-
-    panicf("macho_read() fail  %zu vs %zu",
-            ((uint8_t *) addr - (uint8_t *) buf->data) + size,
-            buf->size);
+    kassert_nonnull(buf->data);
+    kassertf(offset >= 0, "Negative offset %#lx", offset);
+    if (offset + size <= + buf->size) return buf->data + offset;
+    panicf("macho_read() fail  offset: %ld size: %zd", offset, buf->size);
 }
 
 static inline uint32_t swap32(uint32_t i)
@@ -58,7 +54,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
     kassert_nonnull(buf);
     kassert_nonnull(uuid);
 
-    h = macho_read(buf, buf->data, sizeof(*h));
+    h = macho_read(buf, 0, sizeof(*h));
 
     if (h->magic == MH_MAGIC_64 || h->magic == MH_CIGAM_64) {
         LOG_OFF("64-bit Mach-O %s", mh_magic[h->magic == MH_CIGAM_64]);
@@ -71,7 +67,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
     }
 
     for (i = 0; i < s32(h->ncmds); i++) {
-        cmd = macho_read(buf, buf->data + off, sizeof(*cmd));
+        cmd = macho_read(buf, off, sizeof(*cmd));
 
         if (s32(cmd->cmd) != LC_UUID) {
             off += s32(cmd->cmdsize);
@@ -79,7 +75,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
         }
 
         kassert_eq(s32(cmd->cmdsize), sizeof(*ucmd));
-        ucmd = macho_read(buf, cmd, sizeof(*ucmd));
+        ucmd = macho_read(buf, off, sizeof(*ucmd));
         uuid_unparse(ucmd->uuid, uuid);
         LOG_DBG("LC index %u UUID: %s", i, uuid);
 
@@ -116,7 +112,7 @@ errno_t find_LC_UUID(
     buf.data = (void *) addr;
     buf.size = size;
 
-    m = macho_read(&buf, buf.data, sizeof(*m));
+    m = macho_read(&buf, 0, sizeof(*m));
     switch (*m) {
     case MH_MAGIC:
     case MH_CIGAM:
@@ -129,21 +125,21 @@ errno_t find_LC_UUID(
     }
     case FAT_MAGIC:
     case FAT_CIGAM: {
-        struct fat_header *fh = macho_read(&buf, buf.data, sizeof(*fh));
+        struct fat_header *fh = macho_read(&buf, 0, sizeof(*fh));
         uint32_t nfat = OSSwapBigToHostInt32(fh->nfat_arch);
         LOG_DBG("%u arch detected", nfat);
-        struct fat_arch *fas = macho_read(&buf, fh + sizeof(*fh), sizeof(*fas));
+        struct fat_arch *fas = macho_read(&buf, sizeof(*fh), sizeof(*fas));
 
         uint32_t i;
         struct fat_arch *fa;
         buffer_t sub;
         bool swap;
         for (i = 0; i < nfat; i++) {
-            fa = macho_read(&buf, fas + i, sizeof(*fa));
+            fa = macho_read(&buf, sizeof(*fh) + sizeof(*fas) * i, sizeof(*fa));
             sub.size = OSSwapBigToHostInt32(fa->size);
-            sub.data = macho_read(&buf, fh + OSSwapBigToHostInt32(fa->offset), sub.size);
+            sub.data = macho_read(&buf, OSSwapBigToHostInt32(fa->offset), sub.size);
 
-            m = macho_read(&sub, sub.data, sizeof(*m));
+            m = macho_read(&sub, 0, sizeof(*m));
             swap = (*m == MH_CIGAM || *m == MH_CIGAM_64);
             LOG_DBG("Arch #%d (%d-%d) magic: %s",
                     i, fa->cputype, fa->cpusubtype, mh_magic[swap]);
