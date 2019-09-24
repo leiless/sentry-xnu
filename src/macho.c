@@ -28,16 +28,6 @@ static void *macho_read(buffer_t *buf, void *addr, size_t size)
             buf->size);
 }
 
-//static
-void *macho_offset_read(
-        buffer_t *buf,
-        void *addr,
-        off_t off,
-        size_t size)
-{
-    return macho_read(buf, ((uint8_t *) addr) + off, size);
-}
-
 static inline uint32_t swap32(uint32_t i)
 {
     return OSSwapInt32(i);
@@ -91,15 +81,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
         kassert_eq(s32(cmd->cmdsize), sizeof(*ucmd));
         ucmd = macho_read(buf, cmd, sizeof(*ucmd));
         uuid_unparse(ucmd->uuid, uuid);
-#if 0
-        LOG("Load command index %u\n"
-            "       cmd: %u LC_UUID\n"
-            "   cmdsize: %u\n"
-            "      uuid: %s\n",
-            i, s32(cmd->cmd), s32(cmd->cmdsize), uuid);
-#else
-        LOG("LC index %u uuid: %s", i, uuid);
-#endif
+        LOG_DBG("LC index %u UUID: %s", i, uuid);
 
         return 0;
     }
@@ -166,18 +148,12 @@ errno_t find_LC_UUID(
             LOG_DBG("Arch #%d (%d-%d) magic: %s",
                     i, fa->cputype, fa->cpusubtype, mh_magic[swap]);
 
-            e = find_LC_UUID0(&sub, swap, uuid);
-            if (e != 0) LOG_ERR("find_LC_UUID() fail  i: %u errno: %d", i, e);
+            if ((e = find_LC_UUID0(&sub, swap, uuid)) == 0) break;
+            LOG_ERR("find_LC_UUID0() fail  i: %u errno: %d", i, e);
         }
-
+        if (nfat == 0) e = ENOENT;
         break;
     }
-/*
-    case FAT_MAGIC_64:
-    case FAT_CIGAM_64: {
-
-    }
-*/
     default:
         LOG_ERR("Bad magic: %#x", *m);
         e = EBADMACHO;
@@ -186,7 +162,7 @@ errno_t find_LC_UUID(
 
 out_exit:
     if (e && (flags & MACHO_SET_UUID_FAIL)) {
-        (void) snprintf(uuid, sizeof(__typeof__(uuid)), "00000000-0000-0000-0000-000000000000");
+        uuid_unparse(UUID_NULL, uuid);
     }
     return e;
 }
