@@ -30,10 +30,12 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     if (e != 0) {
         LOG_ERR("sentry_new() fail  errno: %d", e);
     } else {
+#if 0
         sentry_capture_message(handle, 0, "sentry handle: %p", handle);
 
         /* Sleep some time  so the message have chance to pushed out */
         (void) usleep(1000 * USEC_PER_MSEC);
+#endif
 
         sentry_destroy(handle);
     }

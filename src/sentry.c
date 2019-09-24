@@ -362,6 +362,16 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
         kr = kr->next;
     }
 
+    uuid_string_t uuid;
+    kmod_info_t *k = ki;
+    errno_t e;
+    while (k != NULL) {
+        //LOG_DBG("%4u %s %s", k->id, k->name, k->version);
+        e = find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
+        if (e != 0) LOG_ERR("find_LC_UUID() fail  %u %s %s %#lx %#lx", k->id, k->name, k->version, k->address, k->size);
+        k = k->next;
+    }
+
     if (n > 0) {
         p = util_malloc(n + 1);
         if (p != NULL) {
@@ -396,13 +406,14 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->stop);
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func_stop", buf, NULL);
 
-    uuid_string_t uu;
-    errno_t e = find_LC_UUID(ki->address, ki->size, MACHO_SET_UUID_FAIL, uu);
+/*
+    errno_t e = find_LC_UUID(ki->address, ki->size, MACHO_SET_UUID_FAIL, uuid);
     if (e == 0) {
-        (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "LC_UUID", uu, NULL);
+        (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "LC_UUID", uuid, NULL);
     } else {
         LOG_ERR("find_LC_UUID() fail  errno: %d", e);
     }
+*/
 }
 
 #define SYSCTL_BUFSZ    144     /* Should be enough */

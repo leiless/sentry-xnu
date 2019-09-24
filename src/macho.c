@@ -71,10 +71,10 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
     h = macho_read(buf, buf->data, sizeof(*h));
 
     if (h->magic == MH_MAGIC_64 || h->magic == MH_CIGAM_64) {
-        LOG_DBG("64-bit Mach-O %s", mh_magic[h->magic == MH_CIGAM_64]);
+        LOG_OFF("64-bit Mach-O %s", mh_magic[h->magic == MH_CIGAM_64]);
         off = sizeof(struct mach_header_64);
     } else if (h->magic == MH_MAGIC || h->magic == MH_CIGAM) {
-        LOG_DBG("32-bit Mach-O %s", mh_magic[h->magic == MH_CIGAM]);
+        LOG_OFF("32-bit Mach-O %s", mh_magic[h->magic == MH_CIGAM]);
         off = sizeof(struct mach_header);
     } else {
         return EBADMACHO;
@@ -91,11 +91,15 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
         kassert_eq(s32(cmd->cmdsize), sizeof(*ucmd));
         ucmd = macho_read(buf, cmd, sizeof(*ucmd));
         uuid_unparse(ucmd->uuid, uuid);
+#if 0
         LOG("Load command index %u\n"
             "       cmd: %u LC_UUID\n"
             "   cmdsize: %u\n"
             "      uuid: %s\n",
             i, s32(cmd->cmd), s32(cmd->cmdsize), uuid);
+#else
+        LOG("LC index %u uuid: %s", i, uuid);
+#endif
 
         return 0;
     }
@@ -116,6 +120,12 @@ errno_t find_LC_UUID(
 
     kassert(addr || !size);
     kassert_nonnull(uuid);
+
+    if (addr == (__typeof__(addr)) NULL) {
+        e = EINVAL;
+        goto out_exit;
+    }
+
     if (size <= sizeof(struct mach_header)) {
         e = EBADMACHO;
         goto out_exit;
