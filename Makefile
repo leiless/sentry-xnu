@@ -29,7 +29,7 @@ endif
 BUNDLEID?=	$(BUNDLEDOMAIN).kext.$(KEXTNAME)
 KEXTBUNDLE?=	$(KEXTNAME).kext
 KEXTMACHO?=	$(KEXTNAME).out
-ARCHFLAGS?=	-arch x86_64
+ARCHFLAGS?=	-arch x86_64 -arch x86_64h
 #ARCHFLAGS?=	-arch x86_64 -arch i386
 PREFIX?=	/Library/Extensions
 

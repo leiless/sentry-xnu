@@ -137,6 +137,28 @@ errno_t find_LC_UUID(
     }
     case FAT_MAGIC:
     case FAT_CIGAM: {
+        struct fat_header *fh = macho_read(&buf, buf.data, sizeof(*fh));
+        uint32_t nfat = OSSwapBigToHostInt32(fh->nfat_arch);
+        LOG_DBG("%u arch detected", nfat);
+        struct fat_arch *fas = macho_read(&buf, fh + sizeof(*fh), sizeof(*fas));
+
+        uint32_t i;
+        struct fat_arch *fa;
+        buffer_t sub;
+        bool swap;
+        for (i = 0; i < nfat; i++) {
+            fa = macho_read(&buf, fas + i, sizeof(*fa));
+            sub.size = OSSwapBigToHostInt32(fa->size);
+            sub.data = macho_read(&buf, fh + OSSwapBigToHostInt32(fa->offset), sub.size);
+
+            m = macho_read(&sub, sub.data, sizeof(*m));
+            swap = (*m == MH_CIGAM || *m == MH_CIGAM_64);
+            LOG_DBG("Arch #%d (%d-%d) magic: %s",
+                    i, fa->cputype, fa->cpusubtype, mh_magic[swap]);
+
+            e = find_LC_UUID0(&sub, swap, uuid);
+            if (e != 0) LOG_ERR("find_LC_UUID() fail  i: %u errno: %d", i, e);
+        }
 
         break;
     }
@@ -147,6 +169,7 @@ errno_t find_LC_UUID(
     }
 */
     default:
+        LOG_ERR("Bad magic: %#x", *m);
         e = EBADMACHO;
         break;
     }
