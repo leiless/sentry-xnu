@@ -15,7 +15,7 @@ typedef struct {
     size_t size;
 } buffer_t;
 
-static void *buffer_read(buffer_t *buf, void *addr, size_t size)
+static void *macho_read(buffer_t *buf, void *addr, size_t size)
 {
     kassert_nonnull(buf);
     kassert_nonnull(addr);
@@ -23,26 +23,27 @@ static void *buffer_read(buffer_t *buf, void *addr, size_t size)
     if (((uint8_t *) addr - (uint8_t *) buf->data) + size <= + buf->size)
         return addr;
 
-    panicf("buffer_read() fail  %zu vs %zu",
+    panicf("macho_read() fail  %zu vs %zu",
             ((uint8_t *) addr - (uint8_t *) buf->data) + size,
             buf->size);
 }
 
-static void *buffer_offset_read(
+//static
+void *macho_offset_read(
         buffer_t *buf,
         void *addr,
         off_t off,
         size_t size)
 {
-    return buffer_read(buf, ((uint8_t *) addr) + off, size);
+    return macho_read(buf, ((uint8_t *) addr) + off, size);
 }
 
-static inline uint32_t macho_swap32(uint32_t i)
+static inline uint32_t swap32(uint32_t i)
 {
     return OSSwapInt32(i);
 }
 
-static inline uint32_t macho_nswap32(uint32_t i)
+static inline uint32_t nswap32(uint32_t i)
 {
     return i;
 }
@@ -57,14 +58,17 @@ static const char *mh_magic[] = {
  */
 static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
 {
-    uint32_t (*s32)(uint32_t) = swap ? macho_swap32 : macho_nswap32;
+    uint32_t (*s32)(uint32_t) = swap ? swap32 : nswap32;
     struct mach_header *h;
     struct load_command *cmd;
     struct uuid_command *ucmd;
     off_t off;
     uint32_t i;
 
-    h = buffer_read(buf, buf->data, sizeof(*h));
+    kassert_nonnull(buf);
+    kassert_nonnull(uuid);
+
+    h = macho_read(buf, buf->data, sizeof(*h));
 
     if (h->magic == MH_MAGIC_64 || h->magic == MH_CIGAM_64) {
         LOG_DBG("64-bit Mach-O %s", mh_magic[h->magic == MH_CIGAM_64]);
@@ -77,7 +81,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
     }
 
     for (i = 0; i < s32(h->ncmds); i++) {
-        cmd = buffer_offset_read(buf, buf->data, off, sizeof(*cmd));
+        cmd = macho_read(buf, buf->data + off, sizeof(*cmd));
 
         if (s32(cmd->cmd) != LC_UUID) {
             off += s32(cmd->cmdsize);
@@ -85,17 +89,14 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
         }
 
         kassert_eq(s32(cmd->cmdsize), sizeof(*ucmd));
-        ucmd = buffer_read(buf, cmd, sizeof(*ucmd));
-
-        kassert_eq(cmd->cmd, ucmd->cmd);
-        kassert_eq(cmd->cmdsize, ucmd->cmdsize);
-
+        ucmd = macho_read(buf, cmd, sizeof(*ucmd));
         uuid_unparse(ucmd->uuid, uuid);
-        LOG("Load command %u\n"
+        LOG("Load command index %u\n"
             "       cmd: %u LC_UUID\n"
             "   cmdsize: %u\n"
             "      uuid: %s\n",
             i, s32(cmd->cmd), s32(cmd->cmdsize), uuid);
+
         return 0;
     }
 
@@ -110,7 +111,7 @@ errno_t find_LC_UUID(
 {
     errno_t e = 0;
     buffer_t buf;
-    uint32_t *m;    /* Magic number */
+    uint32_t *m;
     bool swap;
 
     kassert(addr || !size);
@@ -123,7 +124,7 @@ errno_t find_LC_UUID(
     buf.data = (void *) addr;
     buf.size = size;
 
-    m = buffer_read(&buf, buf.data, sizeof(*m));
+    m = macho_read(&buf, buf.data, sizeof(*m));
     switch (*m) {
     case MH_MAGIC:
     case MH_CIGAM:
