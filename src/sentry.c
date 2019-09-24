@@ -337,6 +337,8 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     cJSON *kext;
     char buf[PTR_BUFSZ];
     kmod_reference_t *kr;
+    kmod_info_t *k;
+    uuid_string_t uuid;
     size_t i, n;
     char *p;
     errno_t e;
@@ -358,14 +360,15 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     n = 0;
     kr = ki->reference_list;
     while (kr != NULL) {
-        kassert_nonnull(kr->info);
-        n += snprintf(NULL, 0, "%u: %s (%s)\n", kr->info->id, kr->info->name, kr->info->version);
+        k = kr->info;
+        kassert_nonnull(k);
+        (void) find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
+        n += snprintf(NULL, 0, "%u: %#lx %#lx %s %s (%s)\n", k->id, k->address, k->size, uuid, k->name, k->version);
         kr = kr->next;
     }
 
 #if 1
-    uuid_string_t uuid;
-    kmod_info_t *k = ki;
+    k = ki;
     while (k != NULL) {
         e = find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
         if (e != 0) LOG_ERR("find_LC_UUID() fail  %u %s %s %#lx %#lx", k->id, k->name, k->version, k->address, k->size);
@@ -379,8 +382,10 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
             kr = ki->reference_list;
             i = 0;
             while (kr != NULL && i < n) {
-                kassert_nonnull(kr->info);
-                i += snprintf(p + i, n - i, "%u: %s (%s)\n", kr->info->id, kr->info->name, kr->info->version);
+                k = kr->info;
+                kassert_nonnull(k);
+                (void) find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
+                i += snprintf(p + i, n - i, "%u: %#lx %#lx %s %s (%s)\n", k->id, k->address, k->size, uuid, k->name, k->version);
                 kr = kr->next;
             }
             kassert(kr == NULL);
