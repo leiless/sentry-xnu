@@ -1,5 +1,7 @@
 /*
  * Created 190923 lynnl
+ *
+ * see: https://gist.github.com/lynnlx/03114faeb120f161abad8d46f5e6d56c
  */
 
 #include "utils.h"

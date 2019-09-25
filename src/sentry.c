@@ -516,10 +516,27 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
     os = cJSON_AddObjectToObject(contexts, "os");
     if (os != NULL) {
-        (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "name", ostype, NULL);
-        (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "version", osrelease, NULL);
+        (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "name", "macOS", NULL);
+
+        if (sysctlbyname_string("kern.osproductversion", str, sizeof(str))) {
+            (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "version", str, NULL);
+        }
+
         (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS | CJH_CONST_RHS, "kernel_version", version, NULL);
-        /* TODO: os.build, os.rooted, os.raw_description */
+
+        if (sysctlbyname_string("kern.osversion", str, sizeof(str))) {
+            (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "build", str, NULL);
+        }
+
+        if (sysctlbyname_string("kern.uuid", str, sizeof(str))) {
+            (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "kern.uuid", str, NULL);
+        }
+
+        if (sysctlbyname_string("kern.bootargs", str, sizeof(str))) {
+            (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "kern.bootargs", str, NULL);
+        }
+
+        /* TODO: os.rooted, os.raw_description */
     }
 
     ctx_populate_kmod_info(contexts, ki);
@@ -551,6 +568,11 @@ static bool sentry_ctx_clear(void *handle, kmod_info_t * __nullable ki)
     return true;
 }
 
+static void sentry_ctx_merge(void *handle, const cJSON *ctx)
+{
+    UNUSED(handle, ctx);
+}
+
 /**
  * Create a Sentry handle
  *
@@ -577,8 +599,6 @@ int sentry_new(
     sentry_t *h;
     struct timeval tv;
     struct sockaddr_in sin;
-
-    UNUSED(ctx);    /* TODO */
 
     if (handlep == NULL || dsn == NULL || sample_rate > 100) {
         e = EINVAL;
@@ -616,6 +636,7 @@ int sentry_new(
         e = ENOMEM;
         goto out_lck_rw;
     }
+    sentry_ctx_merge(h, ctx);
 
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, h, &h->so);
     if (e != 0) goto out_cjson;
