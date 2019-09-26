@@ -430,7 +430,6 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
     char str[SYSCTL_BUFSZ];
     int i32;
     uint64_t u64;
-    struct vfsstatfs st;
     struct timeval tv;
     size_t sz;
     char ts[ISO8601_TM_BUFSZ];
@@ -473,22 +472,6 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
         if (sysctlbyname_u64("hw.cpufrequency", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.cpufrequency", u64, NULL);
-        }
-
-        if (sysctlbyname_u64("hw.memsize", &u64)) {
-            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
-        }
-        /* TODO: free_memory, usable_memory */
-
-        e = vfsstatfs_root(&st);
-        if (e == 0) {
-            u64 = st.f_bsize * st.f_blocks;
-            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "storage_size", u64, NULL);
-
-            u64 = st.f_bsize * st.f_bavail;
-            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "free_storage", u64, NULL);
-        } else {
-            LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
         }
 
         if (sysctlbyname_u64("hw.pagesize", &u64)) {
@@ -786,10 +769,31 @@ static int format_event_data(
 
 static void builtin_pre_send_hook(sentry_t *h)
 {
+    errno_t e;
+    uint64_t u64;
+    struct vfsstatfs st;
+    cJSON *device = cJSON_GetObjectItem(h->ctx, "device");
+
     kassert_nonnull(h);
     /* XXX: h->lck_rw already in exclusive-locked state */
 
-    /* TODO */
+    if (device != NULL) {
+        if (sysctlbyname_u64("hw.memsize", &u64)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
+        }
+        /* TODO: free_memory, usable_memory */
+
+        e = vfsstatfs_root(&st);
+        if (e == 0) {
+            u64 = st.f_bsize * st.f_blocks;
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "storage_size", u64, NULL);
+
+            u64 = st.f_bsize * st.f_bavail;
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "free_storage", u64, NULL);
+        } else {
+            LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
+        }
+    }
 }
 
 #define PRE_HOOK            0
