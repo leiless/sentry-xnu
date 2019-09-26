@@ -49,13 +49,13 @@ typedef void (*hook_func)(
     void * __nullable
 );
 
-void sentry_set_pre_send_hook(
+hook_func __nullable sentry_set_pre_send_hook(
     void * __nonnull,
     hook_func __nullable,
     void * __nullable
 );
 
-void sentry_set_post_send_hook(
+hook_func __nullable sentry_set_post_send_hook(
     void * __nonnull,
     hook_func __nullable,
     void * __nullable

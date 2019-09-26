@@ -7,6 +7,7 @@
 #include <sys/errno.h>
 #include <sys/vnode.h>
 #include <sys/mount.h>
+#include <sys/sysctl.h>
 #include <libkern/libkern.h>
 #include <libkern/OSAtomic.h>
 #include <libkern/sysctl.h>
@@ -28,6 +29,8 @@
 #define SENTRY_DISABLED         0x80u
 
 typedef struct {
+    kmod_info_t * __nullable ki;
+
     struct in_addr ip;
     uint16_t port;      /* XXX: please wrap with htons() */
 
@@ -244,17 +247,13 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     }
 }
 
-void sysctlbyname_size(const char *name)
+ssize_t sysctlbyname_size(const char *name)
 {
-    size_t sz = SIZE_T_MAX;
-    int e;
+    size_t sz = (size_t) -1;
     kassert_nonnull(name);
-    e = sysctlbyname(name, NULL, &sz, NULL, 0);
-    if (e != 0) {
-        LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
-    } else {
-        LOG_DBG("sysctl %s size: %zu", name, sz);
-    }
+    int e = sysctlbyname(name, NULL, &sz, NULL, 0);
+    if (e != 0) LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
+    return (ssize_t) sz;
 }
 
 static bool sysctlbyname_i32(const char *name, int *out)
@@ -546,7 +545,7 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
  * Reinitialize json context of a Sentry handle
  * @return      true if success, false otherwise
  */
-static bool sentry_ctx_clear(void *handle, kmod_info_t * __nullable ki)
+static bool sentry_ctx_clear(void *handle)
 {
     sentry_t *h = (sentry_t *) handle;
     cJSON *ctx0, *ctx1;
@@ -556,7 +555,7 @@ static bool sentry_ctx_clear(void *handle, kmod_info_t * __nullable ki)
     ctx1 = cJSON_CreateObject();
     if (ctx1 == NULL) return false;
 
-    ctx_populate(ctx1, ki);
+    ctx_populate(ctx1, h->ki);
 
     lck_rw_lock_exclusive(h->lck_rw);
     ctx0 = h->ctx;
@@ -611,6 +610,7 @@ int sentry_new(
         goto out_free;
     }
 
+    h->ki = ki;
     h->sample_rate = sample_rate;
 
     /* lck_grp_name is a dummy placeholder */
@@ -626,7 +626,7 @@ int sentry_new(
         goto out_lck_grp;
     }
 
-    if (!sentry_ctx_clear(h, ki)) {
+    if (!sentry_ctx_clear(h)) {
         e = ENOMEM;
         goto out_lck_rw;
     }
@@ -784,6 +784,14 @@ static int format_event_data(
     return n;
 }
 
+static void builtin_pre_send_hook(sentry_t *h)
+{
+    kassert_nonnull(h);
+    /* XXX: h->lck_rw already in exclusive-locked state */
+
+    /* TODO */
+}
+
 #define PRE_HOOK            0
 #define POST_HOOK           1
 
@@ -798,6 +806,12 @@ static void post_event(sentry_t *h)
     kassert_nonnull(h);
     /* Assure h->lck_rw must in exclusive-locked state */
     kassert(!lck_rw_try_lock(h->lck_rw, LCK_RW_TYPE_EXCLUSIVE));
+
+    builtin_pre_send_hook(h);
+
+    if (h->hook[PRE_HOOK] != NULL) {
+        h->hook[PRE_HOOK](h, h->ctx, h->cookie[PRE_HOOK]);
+    }
 
     ctx = cJSON_Print(h->ctx);
     if (ctx == NULL) {
@@ -827,10 +841,6 @@ out_toctou:
     kassertf((size_t) n == strlen(data), "Bad data length  %d vs %zu", n, strlen(data));
 
     util_zfree(ctx);
-
-    if (h->hook[PRE_HOOK] != NULL) {
-        h->hook[PRE_HOOK](h, h->ctx, h->cookie[PRE_HOOK]);
-    }
 
     e = so_send(h->so, data, n, 0);
     if (e != 0) {
@@ -963,40 +973,46 @@ void sentry_capture_message(void *handle, uint32_t flags, const char *fmt, ...)
     va_end(ap);
 }
 
-static void set_send_hook(
+/**
+ * @return      Previous send hook
+ */
+static hook_func __nullable set_send_hook(
         void *handle,
         hook_func hook,
         void *cookie,
         uint32_t index)
 {
     sentry_t *h = (sentry_t *) handle;
+    hook_func prev;
     kassert_nonnull(h);
     kassertf(index < ARRAY_SIZE(h->hook), "Bad index %u", index);
     lck_rw_lock_exclusive(h->lck_rw);
+    prev = h->hook[index];
     h->hook[index] = hook;
     h->cookie[index] = hook ? cookie : NULL;
     lck_rw_unlock_exclusive(h->lck_rw);
+    return prev;
 }
 
 /**
  * Set pre event send hook
- * @param hook      Event send hook
- * @param cookie    Param pass to event send hook
- *                  When hook is NULL(deregister), cookie will be ignored
+ * @param hook      Event send hook(NULL to deregister)
+ * @param cookie    Cookie pass to event send callback
+ *                  When hook is NULL, cookie will be ignored
  */
-void sentry_set_pre_send_hook(
+hook_func sentry_set_pre_send_hook(
         void *handle,
         hook_func hook,
         void *cookie)
 {
-    set_send_hook(handle, hook, cookie, PRE_HOOK);
+    return set_send_hook(handle, hook, cookie, PRE_HOOK);
 }
 
-void sentry_set_post_send_hook(
+hook_func sentry_set_post_send_hook(
     void *handle,
     hook_func hook,
     void *cookie)
 {
-    set_send_hook(handle, hook, cookie, POST_HOOK);
+    return set_send_hook(handle, hook, cookie, POST_HOOK);
 }
 
