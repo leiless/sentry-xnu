@@ -568,86 +568,6 @@ static bool sentry_ctx_clear(void *handle, kmod_info_t * __nullable ki)
     return true;
 }
 
-static int is_known_ctx_name(const char *name)
-{
-    kassert_nonnull(name);
-    return !strcmp(name, "user") ||
-            !strcmp(name, "tags") ||
-            !strcmp(name, "extra");
-}
-
-/**
- * Merge Sentry context json into Sentry client
- *
- * @handle      An opaque Sentry client handle
- * @ctx         Sentry context json
- *              Pass NULL to clear user/tags/extra contexts
- * @return      0 if success, errno otherwise
- *              EINVAL if ctx isn't JSON object
- *              ENOTSUP if there any unidentified context name
- *
- * see:
- *  https://github.com/DaveGamble/cJSON/issues/167
- *  https://docs.sentry.io/enriching-error-data/context/
- */
-errno_t sentry_ctx_update(void *handle, const cJSON * __nullable ctx)
-{
-    errno_t e = 0;
-    sentry_t *h = (sentry_t *) handle;
-    cJSON *iter;
-
-    kassert_nonnull(h);
-    if (ctx == NULL) {
-        /* Remove user/tags/extra contexts */
-        (void) sentry_ctx_update_user(h, NULL);
-        (void) sentry_ctx_update_tags(h, NULL);
-        (void) sentry_ctx_update_extra(h, NULL);
-        goto out_exit;
-    }
-
-    if (!cJSON_IsObject(ctx)) {
-        e = EINVAL;
-        LOG_ERR("Sentry context %p isn't a JSON object", ctx);
-        goto out_exit;
-    }
-
-    cJSON_ArrayForEach(iter, ctx) {
-        if (iter->string == NULL) continue;
-
-        LOG_DBG("%s\n", iter->string);
-
-        if (is_known_ctx_name(iter->string)) {
-            LOG_DBG("Merging %s into cSentry context\n", iter->string);
-            /* TODO */
-            (void) csentry_ctx_update0(client, iter->string, iter);
-        } else {
-            /* Unknown context names will be simply ignored */
-            LOG_DBG("Ignored unknown context name %s", iter->string);
-        }
-    }
-
-out_exit:
-    return e;
-}
-
-errno_t sentry_ctx_update_user(void *handle, const cJSON * __nullable ctx)
-{
-    UNUSED(handle, ctx);
-    return 0;
-}
-
-errno_t sentry_ctx_update_tags(void *handle, const cJSON * __nullable ctx)
-{
-    UNUSED(handle, ctx);
-    return 0;
-}
-
-errno_t sentry_ctx_update_extra(void *handle, const cJSON * __nullable ctx)
-{
-    UNUSED(handle, ctx);
-    return 0;
-}
-
 /**
  * Create a Sentry handle
  *
@@ -666,7 +586,6 @@ errno_t sentry_ctx_update_extra(void *handle, const cJSON * __nullable ctx)
 int sentry_new(
         void **handlep,
         const char *dsn,
-        const cJSON *ctx,
         uint32_t sample_rate,
         kmod_info_t * __nullable ki)
 {
@@ -711,7 +630,6 @@ int sentry_new(
         e = ENOMEM;
         goto out_lck_rw;
     }
-    sentry_ctx_update(h, ctx);
 
     e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, h, &h->so);
     if (e != 0) goto out_cjson;

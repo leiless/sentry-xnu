@@ -26,7 +26,6 @@
 int sentry_new(
     void * __nullable * __nonnull,
     const char * __nonnull,
-    const cJSON * __nullable,
     uint32_t,
     kmod_info_t * __nullable
 );
@@ -34,11 +33,6 @@ int sentry_new(
 void sentry_debug(void * __nonnull);
 
 void sentry_destroy(void * __nullable);
-
-errno_t sentry_ctx_update(void * __nonnull, const cJSON * __nullable);
-errno_t sentry_ctx_update_user(void * __nonnull, const cJSON * __nullable);
-errno_t sentry_ctx_update_tags(void * __nonnull, const cJSON * __nullable);
-errno_t sentry_ctx_update_extra(void * __nonnull, const cJSON * __nullable);
 
 void sentry_capture_message(
     void * __nonnull,
