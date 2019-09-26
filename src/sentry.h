@@ -35,6 +35,11 @@ void sentry_debug(void * __nonnull);
 
 void sentry_destroy(void * __nullable);
 
+errno_t sentry_ctx_update(void * __nonnull, const cJSON * __nullable);
+errno_t sentry_ctx_update_user(void * __nonnull, const cJSON * __nullable);
+errno_t sentry_ctx_update_tags(void * __nonnull, const cJSON * __nullable);
+errno_t sentry_ctx_update_extra(void * __nonnull, const cJSON * __nullable);
+
 void sentry_capture_message(
     void * __nonnull,
     uint32_t,
@@ -42,7 +47,7 @@ void sentry_capture_message(
     ...
 );
 
-typedef void (*send_hook_func)(
+typedef void (*hook_func)(
     void * __nonnull,
     cJSON * __nonnull,
     void * __nullable
@@ -50,13 +55,13 @@ typedef void (*send_hook_func)(
 
 void sentry_set_pre_send_hook(
     void * __nonnull,
-    send_hook_func __nullable,
+    hook_func __nullable,
     void * __nullable
 );
 
 void sentry_set_post_send_hook(
     void * __nonnull,
-    send_hook_func __nullable,
+    hook_func __nullable,
     void * __nullable
 );
 
