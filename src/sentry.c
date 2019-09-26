@@ -711,6 +711,20 @@ void sentry_destroy(void *handle)
     }
 }
 
+/**
+ * Get Sentry's internal context JSON object
+ * XXX: MT-Unsafe, if you want to add custom contexts to Sentry
+ *      please populate it right after sentry_new()
+ *      Or alternatively, do it in sentry_set_*_send_hook()
+ * see: https://docs.sentry.io/development/sdk-dev/event-payloads/
+ */
+cJSON * __nonnull sentry_ctx_get(void * __nonnull handle)
+{
+    sentry_t *h = (sentry_t *) handle;
+    kassert_nonnull(h);
+    return h->ctx;
+}
+
 static const char * const event_levels[] = {
     /* Default level is error */
     "error", "debug", "info", "warning", "fatal",

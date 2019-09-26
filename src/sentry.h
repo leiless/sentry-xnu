@@ -34,6 +34,8 @@ void sentry_debug(void * __nonnull);
 
 void sentry_destroy(void * __nullable);
 
+cJSON * __nonnull sentry_ctx_get(void * __nonnull);
+
 void sentry_capture_message(
     void * __nonnull,
     uint32_t,
