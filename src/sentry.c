@@ -777,7 +777,10 @@ static void builtin_pre_send_hook(sentry_t *h)
     errno_t e;
     uint64_t u64;
     struct vfsstatfs st;
-    cJSON *device = cJSON_GetObjectItem(h->ctx, "device");
+    struct timeval tv;
+    cJSON *contexts = cJSON_GetObjectItem(h->ctx, "contexts");
+    cJSON *device = contexts ? cJSON_GetObjectItem(contexts, "device") : NULL;
+    cJSON *os = contexts ? cJSON_GetObjectItem(contexts, "os") : NULL;
 
     kassert_nonnull(h);
     /* XXX: h->lck_rw already in exclusive-locked state */
@@ -798,6 +801,13 @@ static void builtin_pre_send_hook(sentry_t *h)
         } else {
             LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
         }
+    }
+
+    if (os != NULL) {
+        /* TODO: use human readable uptime in us, ms, s, m, h, d, y */
+        microuptime(&tv);
+        u64 = tv.tv_sec * USEC_PER_SEC + tv.tv_usec;
+        (void) cJSON_H_AddNumberToObject(os, CJH_CONST_LHS, "uptime_us", u64, NULL);
     }
 }
 
