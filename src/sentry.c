@@ -16,6 +16,9 @@
 #include <kern/locks.h>
 #include <netinet/in.h>
 
+#include <kern/clock.h>
+#include <IOKit/IOPlatformExpert.h>
+
 #include "sentry.h"
 #include "utils.h"
 #include "sock.h"
@@ -389,6 +392,7 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
             }
             kassert(kr == NULL);
             kassertf(i == n, "Bad index  %zu vs %zu", i, n);
+            /* ref_list should be a JSON string array */
             (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "ref_list", p, NULL);
             util_mfree(p);
         }
@@ -419,7 +423,7 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 }
 
-#define SYSCTL_BUFSZ    144     /* Should be enough */
+#define STR_BUFSZ    144     /* Should be enough */
 
 static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 {
@@ -427,7 +431,7 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
     cJSON *contexts;
     cJSON *device;
     cJSON *os;
-    char str[SYSCTL_BUFSZ];
+    char str[STR_BUFSZ];
     int i32;
     uint64_t u64;
     struct timeval tv;
@@ -478,11 +482,12 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "hw.pagesize", u64, NULL);
         }
 
-        if (sysctlbyname_string("hw.model", str, sizeof(str))) {
+        if (PEGetModelName(str, sizeof(str)) || sysctlbyname_string("hw.model", str, sizeof(str))) {
             (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "model", str, NULL);
         }
 
-        /* device.arch is ignored, it'll be fill in os context */
+        if (!PEGetMachineName(str, sizeof(str))) populate_model_name(str);
+        (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "arch", str, NULL);
 
         bzero(&tv, sizeof(tv));
         sz = sizeof(tv);

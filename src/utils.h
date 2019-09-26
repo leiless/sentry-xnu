@@ -154,5 +154,7 @@ double pseudo_strtod(
 
 uint32_t urand32(uint32_t, uint32_t);
 
+extern void populate_model_name(char * __nonnull);
+
 #endif /* SENTRY_XNU_UTILS_H */
 
