@@ -798,11 +798,11 @@ static int format_event_data(
 static void populate_uptime_string(cJSON *os, uint64_t t)
 {
     uint64_t us, s, m, h, d;
-    int n, n2;
-    char *p;
+    int n;
+    char buf[32];       /* 32 is sufficient */
 
     kassert_nonnull(os);
-    kassert(t != 0);
+    if (t == 0) return;
 
     us = t % USEC_PER_SEC;
     t -= us;
@@ -821,40 +821,19 @@ static void populate_uptime_string(cJSON *os, uint64_t t)
     s = t;
 
     if (d > 0) {
-        n = snprintf(NULL, 0, "%llu:%02llu:%02llu:%02llu.%llu", d, h, m, s, us);
+        n = snprintf(buf, sizeof(buf), "%llu:%02llu:%02llu:%02llu.%llu", d, h, m, s, us);
     } else if (h > 0) {
-        n = snprintf(NULL, 0, "%llu:%02llu:%02llu.%llu", h, m, s, us);
+        n = snprintf(buf, sizeof(buf), "%llu:%02llu:%02llu.%llu", h, m, s, us);
     } else if (m > 0) {
-        n = snprintf(NULL, 0, "%llu:%02llu.%llu", m, s, us);
+        n = snprintf(buf, sizeof(buf), "%llu:%02llu.%llu", m, s, us);
     } else if (s > 0) {
-        n = snprintf(NULL, 0, "%llu.%llu", s, us);
+        n = snprintf(buf, sizeof(buf), "%llu.%llu", s, us);
     } else {
-        n = snprintf(NULL, 0, ".%llu", us);
+        n = snprintf(buf, sizeof(buf), ".%llu", us);
     }
     kassert(n > 0);
 
-    p = util_malloc(n + 1);
-    if (p == NULL) {
-        LOG_WARN("util_malloc() fail  size: %d", n + 1);
-        return;
-    }
-
-    if (d > 0) {
-        n2 = snprintf(p, n + 1, "%llu:%02llu:%02llu:%02llu.%llu", d, h, m, s, us);
-    } else if (h > 0) {
-        n2 = snprintf(p, n + 1, "%llu:%02llu:%02llu.%llu", h, m, s, us);
-    } else if (m > 0) {
-        n2 = snprintf(p, n + 1, "%llu:%02llu.%llu", m, s, us);
-    } else if (s > 0) {
-        n2 = snprintf(p, n + 1, "%llu.%llu", s, us);
-    } else {
-        n2 = snprintf(p, n + 1, ".%llu", us);
-    }
-    kassert_eq(n, n2);
-
-    (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime", p, NULL);
-
-    util_mfree(p);
+    (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime", buf, NULL);
 }
 
 static void builtin_pre_send_hook(sentry_t *h)
