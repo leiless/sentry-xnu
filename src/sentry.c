@@ -792,6 +792,71 @@ static int format_event_data(
     return n;
 }
 
+/**
+ * @param t     Uptime in microseconds
+ */
+static void populate_uptime_string(cJSON *os, uint64_t t)
+{
+    uint64_t us, s, m, h, d;
+    int n, n2;
+    char *p;
+
+    kassert_nonnull(os);
+    kassert(t != 0);
+
+    us = t % USEC_PER_SEC;
+    t -= us;
+    t /= USEC_PER_SEC;
+
+    d = t / 86400;
+    t -= d * 86400;
+
+    h = t / 3600;
+    t -= h * 3600;
+
+    m = t / 60;
+    t -= m * 60;
+
+    kassertf(t < 60, "Bad remaining seconds %llu", t);
+    s = t;
+
+    if (d > 0) {
+        n = snprintf(NULL, 0, "%llu:%02llu:%02llu:%02llu.%llu", d, h, m, s, us);
+    } else if (h > 0) {
+        n = snprintf(NULL, 0, "%llu:%02llu:%02llu.%llu", h, m, s, us);
+    } else if (m > 0) {
+        n = snprintf(NULL, 0, "%llu:%02llu.%llu", m, s, us);
+    } else if (s > 0) {
+        n = snprintf(NULL, 0, "%llu.%llu", s, us);
+    } else {
+        n = snprintf(NULL, 0, ".%llu", us);
+    }
+    kassert(n > 0);
+
+    p = util_malloc(n + 1);
+    if (p == NULL) {
+        LOG_WARN("util_malloc() fail  size: %d", n + 1);
+        return;
+    }
+
+    if (d > 0) {
+        n2 = snprintf(p, n + 1, "%llu:%02llu:%02llu:%02llu.%llu", d, h, m, s, us);
+    } else if (h > 0) {
+        n2 = snprintf(p, n + 1, "%llu:%02llu:%02llu.%llu", h, m, s, us);
+    } else if (m > 0) {
+        n2 = snprintf(p, n + 1, "%llu:%02llu.%llu", m, s, us);
+    } else if (s > 0) {
+        n2 = snprintf(p, n + 1, "%llu.%llu", s, us);
+    } else {
+        n2 = snprintf(p, n + 1, ".%llu", us);
+    }
+    kassert_eq(n, n2);
+
+    (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime", p, NULL);
+
+    util_mfree(p);
+}
+
 static void builtin_pre_send_hook(sentry_t *h)
 {
     errno_t e;
@@ -821,10 +886,11 @@ static void builtin_pre_send_hook(sentry_t *h)
     }
 
     if (os != NULL) {
-        /* TODO: use human readable uptime in us, ms, s, m, h, d, y */
         microuptime(&tv);
         u64 = tv.tv_sec * USEC_PER_SEC + tv.tv_usec;
         (void) cJSON_H_AddNumberToObject(os, CJH_CONST_LHS, "uptime_us", u64, NULL);
+
+        populate_uptime_string(os, u64);
     }
 }
 
