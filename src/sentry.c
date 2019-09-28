@@ -435,82 +435,6 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 }
 
-static void foobar(void)
-{
-#if 0
-struct clock_frequency_info_t {
-  unsigned long bus_clock_rate_hz;
-  unsigned long cpu_clock_rate_hz;
-  unsigned long dec_clock_rate_hz;
-
-  unsigned long bus_clock_rate_num;
-  unsigned long bus_clock_rate_den;
-
-  unsigned long bus_to_cpu_rate_num;
-  unsigned long bus_to_cpu_rate_den;
-  unsigned long bus_to_dec_rate_num;
-  unsigned long bus_to_dec_rate_den;
-
-  unsigned long timebase_frequency_hz;
-  unsigned long timebase_frequency_num;
-  unsigned long timebase_frequency_den;
-
-  unsigned long long bus_frequency_hz;
-  unsigned long long bus_frequency_min_hz;
-  unsigned long long bus_frequency_max_hz;
-
-  unsigned long long cpu_frequency_hz;
-  unsigned long long cpu_frequency_min_hz;
-  unsigned long long cpu_frequency_max_hz;
-
-  unsigned long long prf_frequency_hz;
-  unsigned long long prf_frequency_min_hz;
-  unsigned long long prf_frequency_max_hz;
-
-  unsigned long long mem_frequency_hz;
-  unsigned long long mem_frequency_min_hz;
-  unsigned long long mem_frequency_max_hz;
-
-  unsigned long long fix_frequency_hz;
-};
-#endif
-
-    const clock_frequency_info_t * const fq = &gPEClockFrequencyInfo;
-    LOG_DBG("bus_clock_rate_hz: %lu", fq->bus_clock_rate_hz);
-    LOG_DBG("cpu_clock_rate_hz: %lu", fq->cpu_clock_rate_hz);
-    LOG_DBG("dec_clock_rate_hz: %lu", fq->dec_clock_rate_hz);
-
-    LOG_DBG("bus_clock_rate_num: %lu", fq->bus_clock_rate_num);
-    LOG_DBG("bus_clock_rate_den: %lu", fq->bus_clock_rate_den);
-
-    LOG_DBG("bus_to_cpu_rate_num: %lu", fq->bus_to_cpu_rate_num);
-    LOG_DBG("bus_to_cpu_rate_den: %lu", fq->bus_to_cpu_rate_den);
-    LOG_DBG("bus_to_dec_rate_num: %lu", fq->bus_to_dec_rate_num);
-    LOG_DBG("bus_to_dec_rate_den: %lu", fq->bus_to_dec_rate_den);
-
-    LOG_DBG("timebase_frequency_hz: %lu", fq->timebase_frequency_hz);
-    LOG_DBG("timebase_frequency_num: %lu", fq->timebase_frequency_num);
-    LOG_DBG("timebase_frequency_den: %lu", fq->timebase_frequency_den);
-
-    LOG_DBG("bus_frequency_hz: %llu", fq->bus_frequency_hz);
-    LOG_DBG("bus_frequency_min_hz: %llu", fq->bus_frequency_min_hz);
-    LOG_DBG("bus_frequency_max_hz: %llu", fq->bus_frequency_max_hz);
-
-    LOG_DBG("cpu_frequency_hz: %llu", fq->cpu_frequency_hz);
-    LOG_DBG("cpu_frequency_min_hz: %llu", fq->cpu_frequency_min_hz);
-    LOG_DBG("cpu_frequency_max_hz: %llu", fq->cpu_frequency_max_hz);
-
-    LOG_DBG("prf_frequency_hz: %llu", fq->prf_frequency_hz);
-    LOG_DBG("prf_frequency_min_hz: %llu", fq->prf_frequency_min_hz);
-    LOG_DBG("prf_frequency_max_hz: %llu", fq->prf_frequency_max_hz);
-
-    LOG_DBG("mem_frequency_hz: %llu", fq->mem_frequency_hz);
-    LOG_DBG("mem_frequency_min_hz: %llu", fq->mem_frequency_min_hz);
-    LOG_DBG("mem_frequency_max_hz: %llu", fq->mem_frequency_max_hz);
-
-    LOG_DBG("fix_frequency_hz: %llu", fq->fix_frequency_hz);
-}
-
 #define STR_BUFSZ    144     /* Should be enough */
 
 static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
@@ -543,8 +467,6 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
     device = cJSON_AddObjectToObject(contexts, "device");
     if (device != NULL) {
-        foobar();
-
         if (sysctlbyname_u64("hw.memsize", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
         }
@@ -585,6 +507,21 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
         if (PEGetModelName(str, sizeof(str)) || sysctlbyname_string("hw.model", str, sizeof(str))) {
             (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "model", str, NULL);
+
+#if 0
+            /*
+             * System Reports Kernel_*.panic hint:
+             *  System model name: MODEL_NAME (hw.targettype-gPlatformECID)
+             *
+             * see:
+             *  xnu/osfmk/arm/model_dep.c#do_print_all_backtraces()
+             *  xnu/osfmk/kern/debug.c#panic_display_system_configuration()
+             */
+            const uint8_t * const u = gPlatformECID;
+            (void) snprintf(str, sizeof(str), "%02x%02x%02x%02x%02x%02x%02x%02x",
+                        u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
+            (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "model_id", str, NULL);
+#endif
         }
 
         if (!PEGetMachineName(str, sizeof(str))) populate_model_name(str);
@@ -599,6 +536,10 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
             kassertf(e == 0, "fmt_iso8601_time0() fail  errno: %d", e);
 
             (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "boot_time", ts, NULL);
+        }
+
+        if (sysctlbyname_string("machdep.cpu.brand_string", str, sizeof(str))) {
+            (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "cpu.brand_string", str, NULL);
         }
     }
 
