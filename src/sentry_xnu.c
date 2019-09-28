@@ -53,6 +53,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
 {
     UNUSED(ki, d);
+    LOG_DBG("Unloading... " PRIptr " " PRIptr, ptr2hex(ki), ptr2hex(d));
     return KERN_SUCCESS;
 }
 

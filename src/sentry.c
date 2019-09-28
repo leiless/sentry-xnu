@@ -21,6 +21,8 @@
 
 #include <pexpert/pexpert.h>
 
+#include <libkern/OSDebug.h>
+
 #include "sentry.h"
 #include "utils.h"
 #include "sock.h"
@@ -997,6 +999,47 @@ out_toctou:
     }
 }
 
+#define BT_BUFSZ                32
+
+static void enclose_backtrace(cJSON *ctx)
+{
+    void *bt[BT_BUFSZ];
+    int32_t i, nframe;
+    cJSON *frames;
+    char buf[19];
+    int n;
+
+    kassert_nonnull(ctx);
+
+    nframe = OSBacktrace(bt, ARRAY_SIZE(bt));
+    if (unlikely(nframe <= 0)) return;
+
+    frames = cJSON_AddArrayToObject(ctx, "frames");
+    if (frames == NULL) {
+        LOG_ERR("cJSON_AddObjectToObject() fail");
+        return;
+    }
+
+    /*
+     * backtrace 0: OSBacktrace()
+     * backtrace 1: (this function)
+     * see: xnu/libkern/gen/OSDebug.cpp#OSReportWithBacktrace()
+     */
+    for (i = nframe-1; i >= 0; i++) {
+        /* [sic] Frames should be sorted from oldest to newest */
+        n = snprintf(buf, sizeof(buf), "%#018llx", (uint64_t) bt[i]);
+        kassert(n > 0);
+
+        if (!cJSON_H_AddStringToObject(frames, CJH_CONST_LHS, "instruction_addr", buf, NULL)) {
+            cJSON_DeleteItemFromObject(ctx, "frames");
+            kassert(cJSON_GetObjectItem(ctx, "frames") == NULL);
+            return;
+        }
+    }
+}
+
+#define FLAG_ENCLOSE_BT         0x00000001
+
 static void capture_message_ap(
         void *handle,
         uint32_t flags,
@@ -1100,7 +1143,16 @@ out_toctou:
     (void) cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, NULL);
 #endif
 
+    if (flags & FLAG_ENCLOSE_BT) {
+        enclose_backtrace(h->ctx);
+    }
+
     post_event(h);
+
+    if (flags & FLAG_ENCLOSE_BT) {
+        cJSON_DeleteItemFromObject(h->ctx, "frames");
+        kassert(cJSON_GetObjectItem(h->ctx, "frames") == NULL);
+    }
 
     lck_rw_unlock_exclusive(h->lck_rw);
 
@@ -1112,6 +1164,14 @@ void sentry_capture_message(void *handle, uint32_t flags, const char *fmt, ...)
     va_list ap;
     va_start(ap, fmt);
     capture_message_ap(handle, flags, fmt, ap);
+    va_end(ap);
+}
+
+void sentry_capture_exception(void *handle, uint32_t flags, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    capture_message_ap(handle, flags | FLAG_ENCLOSE_BT, fmt, ap);
     va_end(ap);
 }
 

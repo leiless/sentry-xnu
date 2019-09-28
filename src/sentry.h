@@ -43,6 +43,13 @@ void sentry_capture_message(
     ...
 );
 
+void sentry_capture_exception(
+    void * __nonnull,
+    uint32_t,
+    const char * __nonnull,
+    ...
+);
+
 typedef void (*hook_func)(
     void * __nonnull,
     cJSON * __nonnull,
