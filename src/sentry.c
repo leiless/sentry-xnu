@@ -19,6 +19,8 @@
 #include <kern/clock.h>
 #include <IOKit/IOPlatformExpert.h>
 
+#include <pexpert/pexpert.h>
+
 #include "sentry.h"
 #include "utils.h"
 #include "sock.h"
@@ -379,7 +381,7 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
         kr = kr->next;
     }
 
-#if 1
+#if 0
     k = ki;
     while (k != NULL) {
         e = find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
@@ -433,6 +435,82 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 }
 
+static void foobar(void)
+{
+#if 0
+struct clock_frequency_info_t {
+  unsigned long bus_clock_rate_hz;
+  unsigned long cpu_clock_rate_hz;
+  unsigned long dec_clock_rate_hz;
+
+  unsigned long bus_clock_rate_num;
+  unsigned long bus_clock_rate_den;
+
+  unsigned long bus_to_cpu_rate_num;
+  unsigned long bus_to_cpu_rate_den;
+  unsigned long bus_to_dec_rate_num;
+  unsigned long bus_to_dec_rate_den;
+
+  unsigned long timebase_frequency_hz;
+  unsigned long timebase_frequency_num;
+  unsigned long timebase_frequency_den;
+
+  unsigned long long bus_frequency_hz;
+  unsigned long long bus_frequency_min_hz;
+  unsigned long long bus_frequency_max_hz;
+
+  unsigned long long cpu_frequency_hz;
+  unsigned long long cpu_frequency_min_hz;
+  unsigned long long cpu_frequency_max_hz;
+
+  unsigned long long prf_frequency_hz;
+  unsigned long long prf_frequency_min_hz;
+  unsigned long long prf_frequency_max_hz;
+
+  unsigned long long mem_frequency_hz;
+  unsigned long long mem_frequency_min_hz;
+  unsigned long long mem_frequency_max_hz;
+
+  unsigned long long fix_frequency_hz;
+};
+#endif
+
+    const clock_frequency_info_t * const fq = &gPEClockFrequencyInfo;
+    LOG_DBG("bus_clock_rate_hz: %lu", fq->bus_clock_rate_hz);
+    LOG_DBG("cpu_clock_rate_hz: %lu", fq->cpu_clock_rate_hz);
+    LOG_DBG("dec_clock_rate_hz: %lu", fq->dec_clock_rate_hz);
+
+    LOG_DBG("bus_clock_rate_num: %lu", fq->bus_clock_rate_num);
+    LOG_DBG("bus_clock_rate_den: %lu", fq->bus_clock_rate_den);
+
+    LOG_DBG("bus_to_cpu_rate_num: %lu", fq->bus_to_cpu_rate_num);
+    LOG_DBG("bus_to_cpu_rate_den: %lu", fq->bus_to_cpu_rate_den);
+    LOG_DBG("bus_to_dec_rate_num: %lu", fq->bus_to_dec_rate_num);
+    LOG_DBG("bus_to_dec_rate_den: %lu", fq->bus_to_dec_rate_den);
+
+    LOG_DBG("timebase_frequency_hz: %lu", fq->timebase_frequency_hz);
+    LOG_DBG("timebase_frequency_num: %lu", fq->timebase_frequency_num);
+    LOG_DBG("timebase_frequency_den: %lu", fq->timebase_frequency_den);
+
+    LOG_DBG("bus_frequency_hz: %llu", fq->bus_frequency_hz);
+    LOG_DBG("bus_frequency_min_hz: %llu", fq->bus_frequency_min_hz);
+    LOG_DBG("bus_frequency_max_hz: %llu", fq->bus_frequency_max_hz);
+
+    LOG_DBG("cpu_frequency_hz: %llu", fq->cpu_frequency_hz);
+    LOG_DBG("cpu_frequency_min_hz: %llu", fq->cpu_frequency_min_hz);
+    LOG_DBG("cpu_frequency_max_hz: %llu", fq->cpu_frequency_max_hz);
+
+    LOG_DBG("prf_frequency_hz: %llu", fq->prf_frequency_hz);
+    LOG_DBG("prf_frequency_min_hz: %llu", fq->prf_frequency_min_hz);
+    LOG_DBG("prf_frequency_max_hz: %llu", fq->prf_frequency_max_hz);
+
+    LOG_DBG("mem_frequency_hz: %llu", fq->mem_frequency_hz);
+    LOG_DBG("mem_frequency_min_hz: %llu", fq->mem_frequency_min_hz);
+    LOG_DBG("mem_frequency_max_hz: %llu", fq->mem_frequency_max_hz);
+
+    LOG_DBG("fix_frequency_hz: %llu", fq->fix_frequency_hz);
+}
+
 #define STR_BUFSZ    144     /* Should be enough */
 
 static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
@@ -465,10 +543,13 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
     device = cJSON_AddObjectToObject(contexts, "device");
     if (device != NULL) {
+        foobar();
+
         if (sysctlbyname_u64("hw.memsize", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
         }
 
+        /* see: xnu/bsd/vm/vm_unix.c */
         if (sysctlbyname_u32("vm.pages", &u32) && sysctlbyname_i32("vm.pagesize", &i32)) {
             /* usable_memory means actual memory size in bytes(slightly less than memory_size) */
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "usable_memory", u32 * i32, NULL);
