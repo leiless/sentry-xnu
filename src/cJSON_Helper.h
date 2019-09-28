@@ -7,6 +7,8 @@
 #ifndef cJSON_HELPER_H
 #define cJSON_HELPER_H
 
+#include <stdbool.h>
+
 #include "cJSON.h"
 
 #define CJH_CONST_LHS       0x00000001u /* Left hand side is a const */
@@ -31,6 +33,14 @@ cJSON * __nullable cJSON_H_AddNumberToObject(
     uint32_t,
     const char *  __nonnull const,
     double,
+    int * __nullable
+);
+
+cJSON * __nullable cJSON_H_AddBoolToObject(
+    cJSON *  __nonnull const,
+    uint32_t,
+    const char *  __nonnull const,
+    bool,
     int * __nullable
 );
 
