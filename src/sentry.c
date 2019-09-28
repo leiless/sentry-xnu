@@ -274,6 +274,16 @@ static bool sysctlbyname_i32(const char *name, int *out)
     return e == 0;
 }
 
+static bool sysctlbyname_u32(const char *name, uint32_t *out)
+{
+    int i;
+    bool ok;
+    kassert_nonnull(out);
+    ok = sysctlbyname_i32(name, &i);
+    if (ok) *out = (uint32_t) i;
+    return ok;
+}
+
 static bool sysctlbyname_u64(const char *name, uint64_t *u64)
 {
     int e;
@@ -433,6 +443,7 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
     cJSON *os;
     char str[STR_BUFSZ];
     int i32;
+    uint32_t u32;
     uint64_t u64;
     struct timeval tv;
     size_t sz;
@@ -454,6 +465,15 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
     device = cJSON_AddObjectToObject(contexts, "device");
     if (device != NULL) {
+        if (sysctlbyname_u64("hw.memsize", &u64)) {
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
+        }
+
+        if (sysctlbyname_u32("vm.pages", &u32) && sysctlbyname_i32("vm.pagesize", &i32)) {
+            /* usable_memory means actual memory size in bytes(slightly less than memory_size) */
+            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "usable_memory", u32 * i32, NULL);
+        }
+
         /*
          * kext environment doesn't expose hostname to us
          *  sysctlbyname("kern.hostname") return errno EPERM
@@ -786,10 +806,7 @@ static void builtin_pre_send_hook(sentry_t *h)
     /* XXX: h->lck_rw already in exclusive-locked state */
 
     if (device != NULL) {
-        if (sysctlbyname_u64("hw.memsize", &u64)) {
-            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
-        }
-        /* TODO: free_memory, usable_memory */
+        /* TODO: free_memory */
 
         e = vfsstatfs_root(&st);
         if (e == 0) {
