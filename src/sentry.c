@@ -435,69 +435,6 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 }
 
-static const char *PE_Video_rotations[] = {
-    "normal", "right_90", "flip", "left_90"
-};
-
-static void enclose_PE_Video(cJSON *device, char *buf, size_t sz)
-{
-    int n;
-    PE_Video v = PE_state.video;
-
-    kassert_nonnull(device);
-    kassert_nonnull(buf);
-    kassert(sz > 0);
-
-#if 0
-struct PE_Video {
-        unsigned long   v_baseAddr;     /* Base address of video memory */
-        unsigned long   v_rowBytes;     /* Number of bytes per pixel row */
-        unsigned long   v_width;        /* Width */
-        unsigned long   v_height;       /* Height */
-        unsigned long   v_depth;        /* Pixel Depth */
-        unsigned long   v_display;      /* Text or Graphics */
-    char        v_pixelFormat[64];
-    unsigned long    v_offset;    /* offset into video memory to start at */
-    unsigned long    v_length;    /* length of video memory (0 for v_rowBytes * v_height) */
-    unsigned char    v_rotate;    /* Rotation: 0:normal, 1:right 90, 2:left 180, 3:left 90 */
-    unsigned char    v_scale;    /* Scale Factor for both X & Y */
-    char        reserved1[2];
-#ifdef __LP64__
-    long        reserved2;
-#else
-    long        v_baseAddrHigh;
-#endif
-};
-
-    LOG_DBG("v_baseAddr: %lu", v.v_baseAddr);
-    LOG_DBG("v_rowBytes: %lu", v.v_rowBytes);
-    LOG_DBG("v_width: %lu", v.v_width);
-    LOG_DBG("v_height: %lu", v.v_height);
-    LOG_DBG("v_depth: %lu", v.v_depth);
-    LOG_DBG("v_display: %lu", v.v_display);
-    LOG_DBG("v_pixelFormat: %s", v.v_pixelFormat);
-    LOG_DBG("v_offset: %lu", v.v_offset);
-    LOG_DBG("v_length: %lu", v.v_length);
-    LOG_DBG("v_rotate: %d", v.v_rotate);
-    LOG_DBG("v_scale: %d", v.v_scale);
-#endif
-
-    n = snprintf(buf, sz, "%lux%lu", v.v_width, v.v_height);
-    kassert(n > 0);
-
-    (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "screen_resolution", buf, NULL);
-    (void) cJSON_H_AddBoolToObject(device, CJH_CONST_LHS, "PE_Video.v_display", !!v.v_display, NULL);
-
-    if (v.v_rotate < 4) {
-        (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS | CJH_CONST_RHS,
-                    "PE_Video.v_rotate", PE_Video_rotations[v.v_rotate], NULL);
-    } else {
-        (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_rotate", v.v_rotate, NULL);
-    }
-
-    (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_scale", v.v_scale, NULL);
-}
-
 #define STR_BUFSZ    144     /* Should be enough */
 
 static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
@@ -530,8 +467,6 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
     device = cJSON_AddObjectToObject(contexts, "device");
     if (device != NULL) {
-        enclose_PE_Video(device, str, sizeof(str));
-
         if (sysctlbyname_u64("hw.memsize", &u64)) {
             (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
         }
@@ -923,6 +858,36 @@ static void populate_uptime_string(cJSON *os, uint64_t t)
     (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime", buf, NULL);
 }
 
+static const char *PE_Video_rotations[] = {
+    "normal", "right_90_deg", "flip", "left_90_deg"
+};
+
+static void populate_PE_Video(cJSON *device, char *buf, size_t sz)
+{
+    int n;
+    PE_Video v = PE_state.video;
+
+    kassert_nonnull(device);
+    kassert_nonnull(buf);
+    kassert(sz > 0);
+
+    n = snprintf(buf, sz, "%lu x %lu", v.v_width, v.v_height);
+    kassert(n > 0);
+
+    (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "screen_resolution", buf, NULL);
+    (void) cJSON_H_AddBoolToObject(device, CJH_CONST_LHS, "PE_Video.v_display", !!v.v_display, NULL);
+
+    if (v.v_rotate < ARRAY_SIZE(PE_Video_rotations)) {
+        (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS | CJH_CONST_RHS,
+                    "PE_Video.v_rotate", PE_Video_rotations[v.v_rotate], NULL);
+    } else {
+        (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_rotate", v.v_rotate, NULL);
+    }
+
+    /* [NSScreen backingScaleFactor] > 1.0 means Retina screen */
+    (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_scale", v.v_scale, NULL);
+}
+
 static void builtin_pre_send_hook(sentry_t *h)
 {
     errno_t e;
@@ -949,6 +914,8 @@ static void builtin_pre_send_hook(sentry_t *h)
         } else {
             LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
         }
+
+        populate_PE_Video(device, NULL, 0);
     }
 
     if (os != NULL) {
