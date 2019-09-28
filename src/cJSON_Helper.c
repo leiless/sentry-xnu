@@ -32,18 +32,16 @@ cJSON * __nullable cJSON_H_AddStringToObject(
     kassert_nonnull(name);
     kassert_nonnull(str);
 
-    if (flags & CJH_CREATE) {
-        if (cJSON_GetObjectItem(obj, name) != NULL) {
-            if (error != NULL) *error = EEXIST;
-            goto out_exit;
-        }
+    found = cJSON_GetObjectItem(obj, name);
+
+    if ((flags & CJH_CREATE) && found) {
+        if (error != NULL) *error = EEXIST;
+        goto out_exit;
     }
 
-    if (flags & CJH_REPLACE) {
-        if (cJSON_GetObjectItem(obj, name) == NULL) {
-            if (error != NULL) *error = ENOENT;
-            goto out_exit;
-        }
+    if ((flags & CJH_REPLACE) && !found) {
+        if (error != NULL) *error = ENOENT;
+        goto out_exit;
     }
 
     if (flags & CJH_CONST_RHS) {
@@ -63,14 +61,14 @@ cJSON * __nullable cJSON_H_AddStringToObject(
     }
 
     if (flags & CJH_CONST_LHS) {
-        if (flags & CJH_REPLACE) {
+        if ((flags & CJH_REPLACE) || found) {
             cJSON_ReplaceItemInObject(obj, name, str_item);
         } else {
             /* cJSON_AddItemToObjectCS() always success if `name' key is constant */
             cJSON_AddItemToObjectCS(obj, name, str_item);
         }
     } else {
-        if (flags & CJH_REPLACE) {
+        if ((flags & CJH_REPLACE) || found) {
             cJSON_ReplaceItemInObject(obj, name, str_item);
         } else {
             cJSON_AddItemToObject(obj, name, str_item);

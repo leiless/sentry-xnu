@@ -368,9 +368,6 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "name", ki->name, NULL);
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "version", ki->version, NULL);
 
-    /* XXX: ki->reference_count is variable */
-    (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "ref_count", ki->reference_count, NULL);
-
     n = 0;
     kr = ki->reference_list;
     while (kr != NULL) {
@@ -390,6 +387,7 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 #endif
 
+    /* TODO: use an array instead of multiline string */
     if (n > 0) {
         p = util_malloc(n + 1);
         if (p != NULL) {
@@ -862,16 +860,19 @@ static const char *PE_Video_rotations[] = {
     "normal", "right_90_deg", "flip", "left_90_deg"
 };
 
-static void populate_PE_Video(cJSON *device, char *buf, size_t sz)
+/**
+ * XXX: PE_Video seems only denotes primary screen(if you have multiple monitors)
+ */
+static void populate_PE_Video(cJSON *device)
 {
     int n;
+    char buf[16];
     PE_Video v = PE_state.video;
 
     kassert_nonnull(device);
     kassert_nonnull(buf);
-    kassert(sz > 0);
 
-    n = snprintf(buf, sz, "%lu x %lu", v.v_width, v.v_height);
+    n = snprintf(buf, sizeof(buf), "%lu x %lu", v.v_width, v.v_height);
     kassert(n > 0);
 
     (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "screen_resolution", buf, NULL);
@@ -897,6 +898,7 @@ static void builtin_pre_send_hook(sentry_t *h)
     cJSON *contexts = cJSON_GetObjectItem(h->ctx, "contexts");
     cJSON *device = contexts ? cJSON_GetObjectItem(contexts, "device") : NULL;
     cJSON *os = contexts ? cJSON_GetObjectItem(contexts, "os") : NULL;
+    cJSON *kext = contexts ? cJSON_GetObjectItem(contexts, "kext") : NULL;
 
     kassert_nonnull(h);
     /* XXX: h->lck_rw already in exclusive-locked state */
@@ -915,7 +917,7 @@ static void builtin_pre_send_hook(sentry_t *h)
             LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
         }
 
-        populate_PE_Video(device, NULL, 0);
+        populate_PE_Video(device);
     }
 
     if (os != NULL) {
@@ -924,6 +926,11 @@ static void builtin_pre_send_hook(sentry_t *h)
         (void) cJSON_H_AddNumberToObject(os, CJH_CONST_LHS, "uptime_us", u64, NULL);
 
         populate_uptime_string(os, u64);
+    }
+
+    if (kext != NULL) {
+        /* # linkage refs to this kext */
+        (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "ref_count", h->ki->reference_count, NULL);
     }
 }
 
