@@ -1006,7 +1006,7 @@ static void enclose_backtrace(cJSON *ctx)
     void *bt[BT_BUFSZ];
     int32_t i, nframe;
     cJSON *frames;
-    char buf[19];
+    char buf[64];
     int n;
 
     kassert_nonnull(ctx);
@@ -1025,16 +1025,17 @@ static void enclose_backtrace(cJSON *ctx)
      * backtrace 1: (this function)
      * see: xnu/libkern/gen/OSDebug.cpp#OSReportWithBacktrace()
      */
-    for (i = nframe-1; i >= 0; i++) {
+    for (i = nframe-1; i >= 0; i--) {
         /* [sic] Frames should be sorted from oldest to newest */
-        n = snprintf(buf, sizeof(buf), "%#018llx", (uint64_t) bt[i]);
+        n = snprintf(buf, sizeof(buf), "{\"instruction_addr\":\"%#018llx\"}", (uint64_t) bt[i]);
         kassert(n > 0);
 
-        if (!cJSON_H_AddStringToObject(frames, CJH_CONST_LHS, "instruction_addr", buf, NULL)) {
-            cJSON_DeleteItemFromObject(ctx, "frames");
-            kassert(cJSON_GetObjectItem(ctx, "frames") == NULL);
-            return;
-        }
+        if (!cJSON_H_AddItemToArray(frames, cJSON_CreateRaw(buf))) break;
+    }
+
+    if (i >= 0) {
+        cJSON_DeleteItemFromObject(ctx, "frames");
+        kassert(cJSON_GetObjectItem(ctx, "frames") == NULL);
     }
 }
 

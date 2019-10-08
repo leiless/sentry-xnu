@@ -44,5 +44,7 @@ cJSON * __nullable cJSON_H_AddBoolToObject(
     int * __nullable
 );
 
+bool cJSON_H_AddItemToArray(cJSON * __nonnull, cJSON * __nullable);
+
 #endif /* cJSON_HELPER_H */
 

@@ -212,3 +212,14 @@ out_exit:
     return bool_item;
 }
 
+bool cJSON_H_AddItemToArray(cJSON * __nonnull arr, cJSON * __nullable item)
+{
+    int  count;
+    kassert_nonnull(arr);
+    count = cJSON_GetArraySize(arr);
+    /* if `item' equals to NULL, cJSON_AddItemToArray() do nop */
+    cJSON_AddItemToArray(arr, item);
+    /* XXX: MT-unsafe */
+    return cJSON_GetArraySize(arr) == count + 1;
+}
+

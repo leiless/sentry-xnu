@@ -31,7 +31,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
         LOG_ERR("sentry_new() fail  errno: %d", e);
     } else {
 #if 1
-        sentry_capture_message(handle, 0, "kext load cookie: %p", d);
+        //sentry_capture_message(handle, 0, "kext load cookie: %p", d);
+        sentry_capture_exception(handle, 0, "kext load cookie: %p", d);
 
         /* Sleep some time  so the message have chance to pushed out */
         (void) usleep(1000 * USEC_PER_MSEC);
