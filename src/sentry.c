@@ -1001,10 +1001,12 @@ out_toctou:
 
 #define BT_BUFSZ                32
 
-static void enclose_backtrace(cJSON *ctx)
+static void enclose_exception(cJSON *ctx)
 {
     void *bt[BT_BUFSZ];
     int32_t i, nframe;
+    cJSON *exception;
+    cJSON *stacktrace;
     cJSON *frames;
     char buf[64];
     int n;
@@ -1014,9 +1016,25 @@ static void enclose_backtrace(cJSON *ctx)
     nframe = OSBacktrace(bt, ARRAY_SIZE(bt));
     if (unlikely(nframe <= 0)) return;
 
-    frames = cJSON_AddArrayToObject(ctx, "frames");
+    exception = cJSON_CreateObject();
+    if (exception == NULL) return;
+
+    if (!cJSON_H_AddStringToObject(exception, CJH_CONST_LHS, "type", "exception", NULL) ||
+        !cJSON_H_AddStringToObject(exception, CJH_CONST_LHS, "value", "value", NULL))
+    {
+        cJSON_Delete(exception);
+        return;
+    }
+
+    stacktrace = cJSON_AddObjectToObject(exception, "stacktrace");
+    if (stacktrace == NULL) {
+        cJSON_Delete(exception);
+        return;
+    }
+
+    frames = cJSON_AddArrayToObject(stacktrace, "frames");
     if (frames == NULL) {
-        LOG_ERR("cJSON_AddObjectToObject() fail");
+        cJSON_Delete(exception);
         return;
     }
 
@@ -1034,8 +1052,12 @@ static void enclose_backtrace(cJSON *ctx)
     }
 
     if (i >= 0) {
-        cJSON_DeleteItemFromObject(ctx, "frames");
-        kassert(cJSON_GetObjectItem(ctx, "frames") == NULL);
+        cJSON_Delete(exception);
+    } else {
+        cJSON_AddItemToObjectCS(ctx, "exception", exception);
+        if (cJSON_GetObjectItem(ctx, "exception") == NULL) {
+            cJSON_Delete(exception);
+        }
     }
 }
 
@@ -1145,7 +1167,7 @@ out_toctou:
 #endif
 
     if (flags & FLAG_ENCLOSE_BT) {
-        enclose_backtrace(h->ctx);
+        enclose_exception(h->ctx);
     }
 
     post_event(h);
