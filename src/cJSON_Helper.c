@@ -214,7 +214,7 @@ out_exit:
 
 bool cJSON_H_AddItemToArray(cJSON * __nonnull arr, cJSON * __nullable item)
 {
-    int  count;
+    int count;
     kassert_nonnull(arr);
     count = cJSON_GetArraySize(arr);
     /* if `item' equals to NULL, cJSON_AddItemToArray() do nop */
