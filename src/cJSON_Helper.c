@@ -212,7 +212,7 @@ out_exit:
     return bool_item;
 }
 
-bool cJSON_H_AddItemToArray(cJSON * __nonnull arr, cJSON * __nullable item)
+bool cJSON_H_AddItemToArray(cJSON *arr, cJSON * __nullable item)
 {
     int count;
     kassert_nonnull(arr);
@@ -221,5 +221,14 @@ bool cJSON_H_AddItemToArray(cJSON * __nonnull arr, cJSON * __nullable item)
     cJSON_AddItemToArray(arr, item);
     /* XXX: MT-unsafe */
     return cJSON_GetArraySize(arr) == count + 1;
+}
+
+bool cJSON_H_AddItemToObjectCS(
+        cJSON *object,
+        const char *string,
+        cJSON * __nullable item)
+{
+    cJSON_AddItemToObjectCS(object, string, item);
+    return cJSON_GetObjectItem(object, string) != NULL;
 }
 

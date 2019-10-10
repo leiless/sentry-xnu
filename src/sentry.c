@@ -1048,8 +1048,7 @@ static void enclose_exception(sentry_t *h)
     if (i != nframe) {
         cJSON_Delete(backtrace);
     } else {
-        cJSON_AddItemToObjectCS(contexts, "backtrace", backtrace);
-        if (cJSON_GetObjectItem(contexts, "backtrace") == NULL) {
+        if (!cJSON_H_AddItemToObjectCS(contexts, "backtrace", backtrace)) {
             cJSON_Delete(backtrace);
         }
     }
