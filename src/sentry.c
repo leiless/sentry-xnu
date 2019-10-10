@@ -1001,7 +1001,7 @@ out_toctou:
 
 #define BT_BUFSZ                32
 
-static void enclose_exception(sentry_t *h)
+static void enclose_backtrace(sentry_t *h)
 {
     void *bt[BT_BUFSZ];
     int32_t i, nframe;
@@ -1022,10 +1022,10 @@ static void enclose_exception(sentry_t *h)
     if (contexts == NULL) return;
 
     backtrace = cJSON_CreateObject();
-    if (backtrace == NULL) return;
+    if (unlikely(backtrace == NULL)) return;
 
     frames = cJSON_AddArrayToObject(backtrace, "frames");
-    if (frames == NULL) {
+    if (unlikely(frames == NULL)) {
         cJSON_Delete(backtrace);
         return;
     }
@@ -1143,11 +1143,11 @@ out_toctou:
      * XXX: as tested, uuid string with dashes is acceptable for Sentry server
      */
     if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "event_id", uuid, &e) == NULL) {
-        LOG_DBG("cJSON_H_AddStringToObject() event_id fail  errno: %d", e);
+        LOG_ERR("cJSON_H_AddStringToObject() event_id fail  errno: %d", e);
     }
 
     if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "timestamp", ts, &e) == NULL) {
-        LOG_DBG("cJSON_H_AddStringToObject() timestamp fail  errno: %d", e);
+        LOG_ERR("cJSON_H_AddStringToObject() timestamp fail  errno: %d", e);
     }
 
     if (cJSON_H_AddStringToObject(h->ctx, CJH_CONST_LHS, "message", msg, &e) == NULL) {
@@ -1160,7 +1160,7 @@ out_toctou:
 #endif
 
     if (flags & FLAG_ENCLOSE_BT) {
-        enclose_exception(h);
+        enclose_backtrace(h);
     }
 
     post_event(h);

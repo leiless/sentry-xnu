@@ -61,12 +61,15 @@
  */
 #define LOG(fmt, ...)        printf(KEXTNAME_S ": " fmt "\n", ##__VA_ARGS__)
 
-/* TODO: add file, function, lineno */
-#define LOG_WARN(fmt, ...)   LOG("[WARN] " fmt, ##__VA_ARGS__)
-#define LOG_ERR(fmt, ...)    LOG("[ERR] " fmt, ##__VA_ARGS__)
-#define LOG_BUG(fmt, ...)    LOG("[BUG] " fmt, ##__VA_ARGS__)
+#define ___LOG0(fmt, ...)    \
+    LOG(fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__)
 
-#define LOG_TRACE(fmt, ...)  LOG("[TRACE] " fmt, ##__VA_ARGS__)
+/* TODO: add file, function, lineno */
+#define LOG_WARN(fmt, ...)   ___LOG0("[WARN] " fmt, ##__VA_ARGS__)
+#define LOG_ERR(fmt, ...)    ___LOG0("[ERR] " fmt, ##__VA_ARGS__)
+#define LOG_BUG(fmt, ...)    ___LOG0("[BUG] " fmt, ##__VA_ARGS__)
+#define LOG_TRACE(fmt, ...)  ___LOG0("[TRACE] " fmt, ##__VA_ARGS__)
+
 #define LOG_OFF(fmt, ...)    UNUSED(fmt, ##__VA_ARGS__)
 #ifdef DEBUG
 #define LOG_DBG(fmt, ...)    LOG("[DBG] " fmt, ##__VA_ARGS__)
@@ -75,8 +78,8 @@
 #endif
 
 #define panicf(fmt, ...) ({                                     \
-    panic("\n" fmt "\n%s@%s#L%d\n\n",                           \
-        ##__VA_ARGS__, __BASE_FILE__, __FUNCTION__, __LINE__);  \
+    panic("\n" fmt "\n%s@%s()#%d\n\n",                          \
+        ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);      \
     __builtin_unreachable();                                    \
 })
 
