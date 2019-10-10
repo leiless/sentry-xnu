@@ -52,5 +52,11 @@ bool cJSON_H_AddItemToObjectCS(
     cJSON * __nullable
 );
 
+bool cJSON_H_DeleteItemFromObject(
+    cJSON * __nonnull,
+    const char * __nonnull,
+    ...
+);
+
 #endif /* cJSON_HELPER_H */
 

@@ -228,7 +228,51 @@ bool cJSON_H_AddItemToObjectCS(
         const char *string,
         cJSON * __nullable item)
 {
+    kassert_nonnull(object);
+    kassert_nonnull(string);
     cJSON_AddItemToObjectCS(object, string, item);
     return cJSON_GetObjectItem(object, string) != NULL;
+}
+
+/**
+ * XXX: must ends with a NULL, otherwise kernel will panic
+ */
+bool cJSON_H_DeleteItemFromObject(
+        cJSON *object,
+        const char *string,
+        ...)
+{
+    size_t i, count = 0;
+    va_list ap;
+    cJSON *o;
+    const char *s;
+
+    kassert_nonnull(object);
+    kassert_nonnull(string);
+
+    o = object;
+    s = string;
+
+    va_start(ap, string);
+    while (va_arg(ap, const char *) != NULL) count++;
+    va_end(ap);
+
+    va_start(ap, string);
+    for (i = 0; i < count; s = va_arg(ap, const char *)) {
+        kassert_nonnull(s);
+        i++;
+        o = cJSON_GetObjectItem(o, s);
+        if (o == NULL || !cJSON_IsObject(o)) {
+            va_end(ap);
+            return false;
+        }
+    }
+    va_end(ap);
+
+    kassertf(i == count, "%zu vs %zu", i, count);
+
+    kassert_nonnull(s);
+    cJSON_DeleteItemFromObject(o, s);
+    return cJSON_GetObjectItem(o, s) == NULL;
 }
 

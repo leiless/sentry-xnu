@@ -1166,11 +1166,7 @@ out_toctou:
     post_event(h);
 
     if (flags & FLAG_ENCLOSE_BT) {
-        cJSON *contexts = cJSON_GetObjectItem(h->ctx, "contexts");
-        if (contexts != NULL) {
-            cJSON_DeleteItemFromObject(contexts, "backtrace");
-            kassert(cJSON_GetObjectItem(contexts, "backtrace") == NULL);
-        }
+        (void) cJSON_H_DeleteItemFromObject(h->ctx, "contexts", "backtrace", NULL);
     }
 
     lck_rw_unlock_exclusive(h->lck_rw);
