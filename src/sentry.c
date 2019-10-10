@@ -1031,13 +1031,13 @@ static void enclose_exception(sentry_t *h)
     }
 
     /*
+     * Frames sorted from newest to oldest
      * backtrace 0: OSBacktrace()
      * backtrace 1: (this function)
      * see: xnu/libkern/gen/OSDebug.cpp#OSReportWithBacktrace()
      */
-    for (i = nframe-1; i >= 0; i--) {
+    for (i = 0; i < nframe; i++) {
         a = (uint64_t) bt[i];
-        /* [sic] Frames should be sorted from oldest to newest */
         n = snprintf(buf, sizeof(buf), "frame: %#018llx in_kext: %d",
                     a, a >= h->ki->address && a < h->ki->address + h->ki->size);
         kassert(n > 0);
@@ -1045,7 +1045,7 @@ static void enclose_exception(sentry_t *h)
         if (!cJSON_H_AddItemToArray(frames, cJSON_CreateString(buf))) break;
     }
 
-    if (i >= 0) {
+    if (i != nframe) {
         cJSON_Delete(backtrace);
     } else {
         cJSON_AddItemToObjectCS(contexts, "backtrace", backtrace);
@@ -1167,9 +1167,11 @@ out_toctou:
     post_event(h);
 
     if (flags & FLAG_ENCLOSE_BT) {
-        /* TODO: */
-        cJSON_DeleteItemFromObject(h->ctx, "frames");
-        kassert(cJSON_GetObjectItem(h->ctx, "frames") == NULL);
+        cJSON *contexts = cJSON_GetObjectItem(h->ctx, "contexts");
+        if (contexts != NULL) {
+            cJSON_DeleteItemFromObject(contexts, "backtrace");
+            kassert(cJSON_GetObjectItem(contexts, "backtrace") == NULL);
+        }
     }
 
     lck_rw_unlock_exclusive(h->lck_rw);
