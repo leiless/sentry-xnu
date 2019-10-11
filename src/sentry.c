@@ -338,17 +338,16 @@ static errno_t vfsstatfs_root(struct vfsstatfs *out_st)
     return e;
 }
 
-#define PTR_BUFSZ       19
+#define BUFFER_SIZE     192
 
 static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
 {
     cJSON *kext;
-    char buf[PTR_BUFSZ];
+    char buf[BUFFER_SIZE];
     kmod_reference_t *kr;
     kmod_info_t *k;
     uuid_string_t uuid;
-    size_t i, n;
-    char *p;
+    int n;
     errno_t e;
 
     kassert_nonnull(contexts);
@@ -362,16 +361,6 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "name", ki->name, NULL);
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "version", ki->version, NULL);
 
-    n = 0;
-    kr = ki->reference_list;
-    while (kr != NULL) {
-        k = kr->info;
-        kassert_nonnull(k);
-        (void) find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
-        n += snprintf(NULL, 0, "%u: %#lx %#lx %s %s (%s)\n", k->id, k->address, k->size, uuid, k->name, k->version);
-        kr = kr->next;
-    }
-
 #if 0
     k = ki;
     while (k != NULL) {
@@ -381,24 +370,25 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 #endif
 
-    /* TODO: use an array instead of multiline string */
-    if (n > 0) {
-        p = util_malloc(n + 1);
-        if (p != NULL) {
-            kr = ki->reference_list;
-            i = 0;
-            while (kr != NULL && i < n) {
-                k = kr->info;
-                kassert_nonnull(k);
-                (void) find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
-                i += snprintf(p + i, n - i, "%u: %#lx %#lx %s %s (%s)\n", k->id, k->address, k->size, uuid, k->name, k->version);
-                kr = kr->next;
-            }
-            kassert(kr == NULL);
-            kassertf(i == n, "Bad index  %zu vs %zu", i, n);
-            /* ref_list should be a JSON string array */
-            (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "ref_list", p, NULL);
-            util_mfree(p);
+    cJSON *ref_list = cJSON_CreateArray();
+    if (ref_list != NULL) {
+        kr = ki->reference_list;
+        while (kr != NULL) {
+            k = kr->info;
+            kassert_nonnull(k);
+
+            (void) find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
+            n = snprintf(buf, sizeof(buf), "%u: %#lx %#lx %s %s (%s)",
+                    k->id, k->address, k->size, uuid, k->name, k->version);
+            kassert(n > 0);
+
+            if (!cJSON_H_AddItemToArray(ref_list, cJSON_CreateString(buf))) break;
+
+            kr = kr->next;
+        }
+
+        if (kr != NULL || !cJSON_H_AddItemToObjectCS(kext, "ref_list", ref_list)) {
+            cJSON_Delete(ref_list);
         }
     }
 
