@@ -21,8 +21,6 @@
 #define SEL_WRN     0x60000000u
 #define SEL_FTL     0x80000000u
 
-/* TODO: add stack backtrace support(if any) */
-
 int sentry_new(
     void * __nullable * __nonnull,
     const char * __nonnull,

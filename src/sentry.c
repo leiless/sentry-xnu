@@ -766,7 +766,9 @@ static void msg_set_level_attr(sentry_t *h, uint32_t flags)
 #endif
 }
 
-#define SENTRY_PROTO_VER    7           /* XXX: should be configurable */
+/* XXX: those should be configurable */
+#define SENTRY_PROTO_VER    7
+#define SENTRY_ENDPOINT     "sentry.io"
 
 static int format_event_data(
         const sentry_t *h,
@@ -785,7 +787,7 @@ static int format_event_data(
      */
     n = snprintf(buf, buf_len,
             "POST /api/%llu/store/ HTTP/1.1\r\n"
-            "Host: sentry.io\r\n"   /* TODO: should be DSN's endpoint */
+            "Host: " SENTRY_ENDPOINT "\r\n"   /* TODO: should be DSN's endpoint */
             "User-Agent: " SENTRY_XNU_UA "\r\n"
             "X-Sentry-Auth: Sentry sentry_version=%u, sentry_timestamp=%lu, sentry_key=%s\r\n"
             "Content-Type: application/json\r\n"

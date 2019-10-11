@@ -64,7 +64,6 @@
 #define ___LOG0(fmt, ...)    \
     LOG(fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__)
 
-/* TODO: add file, function, lineno */
 #define LOG_WARN(fmt, ...)   ___LOG0("[WARN] " fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...)    ___LOG0("[ERR] " fmt, ##__VA_ARGS__)
 #define LOG_BUG(fmt, ...)    ___LOG0("[BUG] " fmt, ##__VA_ARGS__)
