@@ -53,8 +53,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
     off_t off;
     uint32_t i;
 
-    kassert_nonnull(buf);
-    kassert_nonnull(uuid);
+    kassert_nonnull(buf, uuid);
 
     h = macho_read(buf, 0, sizeof(*h));
 

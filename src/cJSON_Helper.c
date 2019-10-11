@@ -28,9 +28,7 @@ cJSON * __nullable cJSON_H_AddStringToObject(
     cJSON *str_item = NULL;
     cJSON *found;
 
-    kassert_nonnull(obj);
-    kassert_nonnull(name);
-    kassert_nonnull(str);
+    kassert_nonnull(obj, name, str);
 
     found = cJSON_GetObjectItem(obj, name);
 
@@ -102,8 +100,7 @@ cJSON * __nullable cJSON_H_AddNumberToObject(
     cJSON *num_item = NULL;
     cJSON *found;
 
-    kassert_nonnull(obj);
-    kassert_nonnull(name);
+    kassert_nonnull(obj, name);
 
     found = cJSON_GetObjectItem(obj, name);
 
@@ -162,8 +159,7 @@ cJSON * __nullable cJSON_H_AddBoolToObject(
     cJSON *bool_item = NULL;
     cJSON *found;
 
-    kassert_nonnull(obj);
-    kassert_nonnull(name);
+    kassert_nonnull(obj, name);
 
     found = cJSON_GetObjectItem(obj, name);
 
@@ -228,8 +224,7 @@ bool cJSON_H_AddItemToObjectCS(
         const char *string,
         cJSON * __nullable item)
 {
-    kassert_nonnull(object);
-    kassert_nonnull(string);
+    kassert_nonnull(object, string);
     cJSON_AddItemToObjectCS(object, string, item);
     return cJSON_GetObjectItem(object, string) != NULL;
 }
@@ -247,8 +242,7 @@ bool cJSON_H_DeleteItemFromObject(
     cJSON *o;
     const char *s;
 
-    kassert_nonnull(object);
-    kassert_nonnull(string);
+    kassert_nonnull(object, string);
 
     o = object;
     s = string;

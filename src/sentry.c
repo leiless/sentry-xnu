@@ -92,8 +92,7 @@ static bool parse_ip(sentry_t *handle, const char *host, size_t n)
 {
     char buf[IPV4_BUFSZ];
 
-    kassert_nonnull(handle);
-    kassert_nonnull(host);
+    kassert_nonnull(handle, host);
 
     if (n < 7 || n > 15) return false;
     (void) strlcpy(buf, host, n + 1);
@@ -107,8 +106,7 @@ static bool parse_u16(const char *str, size_t n, uint16_t *out)
     char *p = NULL;
     u_long ul;
 
-    kassert_nonnull(str);
-    kassert_nonnull(out);
+    kassert_nonnull(str, out);
 
     if (n == 0 || n >= sizeof(buf)) return false;
     (void) strlcpy(buf, str, n + 1);
@@ -130,8 +128,7 @@ static bool parse_u64(const char *str, size_t n, uint64_t *out)
     uint64_t u64;
 
     ASSURE_TYPE_ALIAS(u_quad_t, uint64_t);
-    kassert_nonnull(str);
-    kassert_nonnull(out);
+    kassert_nonnull(str, out);
 
     if (n == 0 || n >= sizeof(buf)) return false;
     (void) strlcpy(buf, str, n + 1);
@@ -152,8 +149,7 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
 {
     char *p1, *p2;
 
-    kassert_nonnull(handle);
-    kassert_nonnull(dsn);
+    kassert_nonnull(handle, dsn);
 
     /* Currently only HTTP scheme is supported */
     if (!striprefix(dsn, "http://")) return false;
@@ -205,8 +201,7 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     char buf[BUFSZ];
     sentry_t *handle;
 
-    kassert_nonnull(so);
-    kassert_nonnull(cookie);
+    kassert_nonnull(so, cookie);
     UNUSED(waitf);
 
     handle = (sentry_t *) cookie;
@@ -267,8 +262,7 @@ static bool sysctlbyname_i32(const char *name, int *out)
 {
     int e;
     size_t len = 4;
-    kassert_nonnull(name);
-    kassert_nonnull(out);
+    kassert_nonnull(name, out);
     e = sysctlbyname(name, out, &len, NULL, 0);
     if (e != 0) {
         LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
@@ -292,8 +286,7 @@ static bool sysctlbyname_u64(const char *name, uint64_t *u64)
 {
     int e;
     size_t len = sizeof(*u64);
-    kassert_nonnull(name);
-    kassert_nonnull(u64);
+    kassert_nonnull(name, u64);
     e = sysctlbyname(name, u64, &len, NULL, 0);
     if (e != 0) {
         LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
@@ -306,8 +299,7 @@ static bool sysctlbyname_u64(const char *name, uint64_t *u64)
 static bool sysctlbyname_string(const char *name, char *buf, size_t buflen)
 {
     int e;
-    kassert_nonnull(name);
-    kassert_nonnull(buf);
+    kassert_nonnull(name, buf);
     e = sysctlbyname(name, buf, &buflen, NULL, 0);
     if (e != 0) LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
     return e == 0;
@@ -872,7 +864,6 @@ static void populate_PE_Video(cJSON *device)
     PE_Video v = PE_state.video;
 
     kassert_nonnull(device);
-    kassert_nonnull(buf);
 
     n = snprintf(buf, sizeof(buf), "%lu x %lu", v.v_width, v.v_height);
     kassert(n > 0);
@@ -1072,8 +1063,7 @@ static void capture_message_ap(
     char *msg;
     int e;
 
-    kassert_nonnull(h);
-    kassert_nonnull(fmt);
+    kassert_nonnull(h, fmt);
 
     if (!h->connected) {
         /*
