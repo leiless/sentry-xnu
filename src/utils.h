@@ -106,7 +106,8 @@
     (ex) ? (void) 0 : LOG_BUG("Assert `%s' failed: " fmt, #ex, ##__VA_ARGS__)
 #endif
 
-#define kassert_nonnull(ptr)    kassert(ptr != NULL)
+void * __nonnull _kassert_nonnull(const void * __nonnull, ...);
+#define kassert_nonnull(p, ...) _kassert_nonnull(p, ##__VA_ARGS__, _kassert_nonnull)
 
 #define kassert_eq(v1, v2)      kassertf(v1 == v2, "%#lx vs %#lx", (ssize_t) v1, (ssize_t) v2)
 

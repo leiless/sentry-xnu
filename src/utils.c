@@ -13,6 +13,26 @@
 #include "utils.h"
 
 /**
+ * XXX: Must pass _kassert_nonnull at the end of the call, otherwise kernel will panic
+ * @return          first argument
+ */
+void * __nonnull _kassert_nonnull(const void * __nonnull arg, ...)
+{
+    const void *ptr = arg;
+    va_list ap;
+    size_t i = 0;
+
+    va_start(ap, arg);
+    do {
+        i++;
+        kassertf(ptr != NULL, "Argument#%zu is NULL", i);
+    } while ((ptr = va_arg(ap, void *)) != _kassert_nonnull);
+    va_end(ap);
+
+    return (void *) arg;
+}
+
+/**
  * Get unix time stamp in microseconds
  */
 uint64_t utime(uint64_t * __nullable p)
