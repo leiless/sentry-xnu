@@ -422,6 +422,9 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
 #define KERN_ADDR_MASK      0xfffffffffff00000LLU
 #define KERN_BASE_STEP      0x100000
 
+/**
+ * Try to enclose kernel text bases into Sentry context
+ */
 static void kernel_get_bases(cJSON *os)
 {
     uint64_t __hib, kernel;
@@ -432,20 +435,18 @@ static void kernel_get_bases(cJSON *os)
     kassert_nonnull(os);
 
     __hib = ((uint64_t) bcopy) & KERN_ADDR_MASK;
-    kernel = ((uint64_t) lck_mtx_assert) & KERN_ADDR_MASK;
-    while (kernel > __hib && kernel != __hib + KERN_BASE_STEP) {
-        t = *((uint32_t *) kernel);
-        /* Only supported 64-bit Mach-O kernel */
-        if (t == MH_MAGIC_64 || t == MH_CIGAM_64) break;
-        kernel -= KERN_BASE_STEP;
-    }
+    kernel = __hib + KERN_BASE_STEP;
 
-    if (kernel == __hib + KERN_BASE_STEP) {
+    /* This line may cause kernel panic due to page fault */
+    t = *((uint32_t *) kernel);
+
+    /* Only supported 64-bit Mach-O kernel */
+    if (t == MH_MAGIC_64 || t == MH_CIGAM_64) {
         n = snprintf(buf, sizeof(buf), " __HIB: %#018llx\nkernel: %#018llx", __hib, kernel);
         kassert(n > 0);
         (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "text_base", buf, NULL);
     } else {
-        LOG_ERR("Cannot get kernel slides");
+        LOG_ERR("Cannot get kernel slides, kernel memory layout changed?!");
     }
 }
 
