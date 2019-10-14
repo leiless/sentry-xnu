@@ -581,8 +581,6 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
         }
 
         kernel_get_bases(os);
-
-        /* TODO: os.rooted, os.raw_description */
     }
 
     ctx_populate_kmod_info(contexts, ki);
@@ -988,7 +986,6 @@ out_toctou:
 
     data = util_malloc(n + 1);
     if (data == NULL) {
-        /* TODO: we can fallback to use a giant buffer */
         LOG_ERR("util_malloc() fail  size: %d", n);
         util_zfree(ctx);
         return;
