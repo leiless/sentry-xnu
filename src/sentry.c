@@ -236,9 +236,7 @@ static void parse_http_response(sentry_t *h, const char *str)
 
     (void) strlcpy(uuid, s, UUID_BUFSZ_COMPACT);
 
-    i = strlen(uuid);
-    kassert(i % 2 == 0);
-    kassert(i == sizeof(uu) * 2);
+    kassert(strlen(uuid) == sizeof(uu) * 2);
 
     for (i = 0; uuid[i] != '\0'; i += 2) {
         a = char2hex(uuid[i]);
