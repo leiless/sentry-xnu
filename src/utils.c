@@ -337,3 +337,63 @@ uint32_t urand32(uint32_t lo, uint32_t hi)
     return lo + u % (hi - lo);
 }
 
+/**
+ * Fast implementation of strstr() by KMP algorithm
+ *
+ * @haystack        Big string(null-terminated)
+ * @needle          Little string(null-terminated)
+ * @return          If needle is an empty string, haystack is returned;
+ *                  If needle occurs nowhere in haystack, NULL is returned;
+ *                  Otherwise first occurrence of needle in haystack is returned.
+ *
+ * see: https://www.techiedelight.com/implement-strstr-function-c-iterative-recursive
+ */
+char *kmp_strstr(const char *haystack, const char *needle)
+{
+    size_t m, n;
+    uint32_t *next;
+    uint32_t i, j;
+    char *str = NULL;
+
+    kassert_nonnull(haystack, needle);
+
+    m = strlen(haystack);
+    n = strlen(needle);
+
+    /* Base cases */
+    if (n == 0) return (char *) haystack;
+    if (m < n) return NULL;
+
+    /*
+     * NOTE: Do NOT use VLA in case stack overflow
+     * next[i] stores the index of next best partial match
+     */
+    next = (uint32_t *) util_malloc0(sizeof(uint32_t) * (n + 1), M_WAITOK);
+    (void) memset(next, 0, sizeof(uint32_t) * (n + 1));
+
+    for (i = 1; i < n; i++) {
+        j = next[i + 1];
+
+        while (j > 0 && needle[j] != needle[i])
+            j = next[j];
+
+        if (j > 0 || needle[j] == needle[i])
+            next[i + 1] = j + 1;
+    }
+
+    for (i = 0, j = 0; i < m; i++) {
+        if (haystack[i] == needle[j]) {
+            if (++j == n) {
+                str = (char *) haystack + i - j + 1;
+                break;
+            }
+        } else if (j > 0) {
+            j = next[j];
+            i--;    /* i will be incremented in next iteration */
+        }
+    }
+
+    util_mfree(next);
+    return str;
+}
+

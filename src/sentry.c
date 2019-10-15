@@ -182,6 +182,82 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
     return true;
 }
 
+void sentry_get_last_event_id(void *handle, uuid_t out)
+{
+    sentry_t *h = (sentry_t *) handle;
+    kassert_nonnull(h, out);
+    lck_rw_lock_exclusive(h->lck_rw);
+    (void) memcpy(out, h->last_event_id, sizeof(uuid_t));
+    lck_rw_unlock_exclusive(h->lck_rw);
+}
+
+void sentry_get_last_event_id_string(void *handle, uuid_string_t out)
+{
+    uuid_t uu;
+    kassert_nonnull(out);
+    sentry_get_last_event_id(handle, uu);
+    uuid_unparse_lower(uu, out);
+}
+
+static int char2hex(int c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return 10 + c - 'A';
+    if (c >= 'a' && c <= 'f') return 10 + c - 'a';
+    return -1;
+}
+
+/**
+ * NB: Lame HTTP response parsing
+ */
+static void parse_http_response(sentry_t *h, const char *str)
+{
+    const char *s = str;
+    const char *t;
+    uuid_string_t uuid;
+    uuid_t uu;
+    int a, b;
+    size_t i;
+
+    kassert_nonnull(h, s);
+
+    if (!strprefix(s, "HTTP/1.1 200 OK\r\n")) return;
+    s += STRLEN("HTTP/1.1 200 OK\r\n");
+
+    s = kmp_strstr(s, "\r\n\r\n");
+    if (s == NULL) return;
+
+    s += STRLEN("\r\n\r\n");
+    if (!strprefix(s, "{\"id\":\"")) return;
+    s += STRLEN("{\"id\":\"");
+
+    t = kmp_strstr(s, "\"}");
+    if (t == NULL || t - s != UUID_BUFSZ_COMPACT-1) return;
+
+    (void) strlcpy(uuid, s, UUID_BUFSZ_COMPACT);
+
+    i = strlen(uuid);
+    kassert(i % 2 == 0);
+    kassert(i == sizeof(uu) * 2);
+
+    for (i = 0; uuid[i] != '\0'; i += 2) {
+        a = char2hex(uuid[i]);
+        b = char2hex(uuid[i+1]);
+        if (likely(a >= 0 && b >= 0)) {
+            uu[i >> 1] = (a << 4) | b;
+        } else {
+            return;
+        }
+    }
+
+    uuid_unparse_lower(uu, uuid);
+    LOG_DBG("Event ID: %s", uuid);
+
+    lck_rw_lock_exclusive(h->lck_rw);
+    (void) memcpy(h->last_event_id, uu, sizeof(uu));
+    lck_rw_unlock_exclusive(h->lck_rw);
+}
+
 #define BUFSZ           2048
 
 /**
@@ -201,13 +277,13 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     int e;
     int optval, optlen;
     char buf[BUFSZ];
-    sentry_t *handle;
+    sentry_t *h;
 
     kassert_nonnull(so, cookie);
     UNUSED(waitf);
 
-    handle = (sentry_t *) cookie;
-    kassertf(so == handle->so, "[upcall] Bad cookie  %p vs %p", so, handle->so);
+    h = (sentry_t *) cookie;
+    kassertf(so == h->so, "[upcall] Bad cookie  %p vs %p", so, h->so);
 
     if (!sock_isconnected(so)) {
         optval = 0;
@@ -217,10 +293,10 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         kassertf(e == 0, "[upcall] sock_getsockopt() SO_ERROR fail  errno: %d", e);
         LOG_ERR("[upcall] socket not connected  errno: %d", optval);
 
-        (void) OSBitAndAtomic(0, &handle->connected);
+        (void) OSBitAndAtomic(0, &h->connected);
         return;
     } else {
-        if (OSCompareAndSwap(0, 1, &handle->connected)) {
+        if (OSCompareAndSwap(0, 1, &h->connected)) {
             LOG_DBG("[upcall] socket %p is connected!", so);
             return;
         }
@@ -247,7 +323,9 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     if (e != 0) {
         LOG_ERR("[upcall] so_recv() fail  errno: %d", e);
     } else {
+        buf[optval] = '\0';     /* Ensure buffer is NULL-terminated */
         LOG("[upcall] Response (size: %zu)\n%s", strlen(buf), buf);
+        parse_http_response(h, buf);
     }
 }
 
