@@ -946,9 +946,9 @@ static int format_event_data(
  */
 static void populate_uptime_string(cJSON *os, uint64_t t)
 {
-    uint64_t us, s, m, h, d;
+    uint64_t ts = t, us, s, m, h, d;
     int n;
-    char buf[32];       /* 32 is sufficient */
+    char buf[48];       /* Sufficient */
 
     kassert_nonnull(os);
     if (t == 0) return;
@@ -982,7 +982,10 @@ static void populate_uptime_string(cJSON *os, uint64_t t)
     }
     kassert(n > 0);
 
-    (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime", buf, NULL);
+    n = snprintf(buf + n, sizeof(buf) - n, " raw: %llu", ts);
+    kassert(n > 0);
+
+    (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime_us", buf, NULL);
 }
 
 static void builtin_pre_send_hook(sentry_t *h)
@@ -1016,8 +1019,6 @@ static void builtin_pre_send_hook(sentry_t *h)
     if (os != NULL) {
         microuptime(&tv);
         u64 = tv.tv_sec * USEC_PER_SEC + tv.tv_usec;
-        (void) cJSON_H_AddNumberToObject(os, CJH_CONST_LHS, "uptime_us", u64, NULL);
-
         populate_uptime_string(os, u64);
     }
 
