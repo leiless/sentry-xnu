@@ -495,6 +495,38 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 }
 
+static const char *PE_Video_rotations[] = {
+    "normal", "right_90_deg", "flip", "left_90_deg"
+};
+
+/**
+ * XXX: PE_Video seems only denotes primary screen(if you have multiple monitors) and immutable after os booted
+ */
+static void populate_PE_Video(cJSON *device)
+{
+    int n;
+    char buf[16];
+    PE_Video v = PE_state.video;
+
+    kassert_nonnull(device);
+
+    n = snprintf(buf, sizeof(buf), "%lu x %lu", v.v_width, v.v_height);
+    kassert(n > 0);
+
+    (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "screen_resolution", buf, NULL);
+    (void) cJSON_H_AddBoolToObject(device, CJH_CONST_LHS, "PE_Video.v_display", !!v.v_display, NULL);
+
+    if (v.v_rotate < ARRAY_SIZE(PE_Video_rotations)) {
+        (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS | CJH_CONST_RHS,
+                    "PE_Video.v_rotate", PE_Video_rotations[v.v_rotate], NULL);
+    } else {
+        (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_rotate", v.v_rotate, NULL);
+    }
+
+    /* [NSScreen backingScaleFactor] > 1.0 means Retina screen */
+    (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_scale", v.v_scale, NULL);
+}
+
 #define KERN_ADDR_MASK      0xfffffffffff00000LLU
 #define KERN_BASE_STEP      0x100000
 
@@ -632,6 +664,8 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
         if (sysctlbyname_string("machdep.cpu.brand_string", str, sizeof(str))) {
             (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "cpu.brand_string", str, NULL);
         }
+
+        populate_PE_Video(device);
     }
 
     os = cJSON_AddObjectToObject(contexts, "os");
@@ -951,38 +985,6 @@ static void populate_uptime_string(cJSON *os, uint64_t t)
     (void) cJSON_H_AddStringToObject(os, CJH_CONST_LHS, "uptime", buf, NULL);
 }
 
-static const char *PE_Video_rotations[] = {
-    "normal", "right_90_deg", "flip", "left_90_deg"
-};
-
-/**
- * XXX: PE_Video seems only denotes primary screen(if you have multiple monitors)
- */
-static void populate_PE_Video(cJSON *device)
-{
-    int n;
-    char buf[16];
-    PE_Video v = PE_state.video;
-
-    kassert_nonnull(device);
-
-    n = snprintf(buf, sizeof(buf), "%lu x %lu", v.v_width, v.v_height);
-    kassert(n > 0);
-
-    (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "screen_resolution", buf, NULL);
-    (void) cJSON_H_AddBoolToObject(device, CJH_CONST_LHS, "PE_Video.v_display", !!v.v_display, NULL);
-
-    if (v.v_rotate < ARRAY_SIZE(PE_Video_rotations)) {
-        (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS | CJH_CONST_RHS,
-                    "PE_Video.v_rotate", PE_Video_rotations[v.v_rotate], NULL);
-    } else {
-        (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_rotate", v.v_rotate, NULL);
-    }
-
-    /* [NSScreen backingScaleFactor] > 1.0 means Retina screen */
-    (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_scale", v.v_scale, NULL);
-}
-
 static void builtin_pre_send_hook(sentry_t *h)
 {
     errno_t e;
@@ -1010,8 +1012,6 @@ static void builtin_pre_send_hook(sentry_t *h)
         } else {
             LOG_ERR("root_vfsstatfs() fail  errno: %d", e);
         }
-
-        populate_PE_Video(device);
     }
 
     if (os != NULL) {
