@@ -909,7 +909,7 @@ static void msg_set_level_attr(sentry_t *h, uint32_t flags)
 #endif
 }
 
-/* XXX: those should be configurable */
+/* TODO: those should be configurable */
 #define SENTRY_PROTO_VER    7
 #define SENTRY_ENDPOINT     "sentry.io"
 
@@ -997,11 +997,10 @@ static void builtin_pre_send_hook(sentry_t *h)
     cJSON *kext = contexts ? cJSON_GetObjectItem(contexts, "kext") : NULL;
 
     kassert_nonnull(h);
-    /* XXX: h->lck_rw already in exclusive-locked state */
+    /* (ditto) Assure h->lck_rw must in exclusive-locked state */
+    kassert(!lck_rw_try_lock(h->lck_rw, LCK_RW_TYPE_EXCLUSIVE));
 
     if (device != NULL) {
-        /* TODO: free_memory */
-
         e = vfsstatfs_root(&st);
         if (e == 0) {
             u64 = st.f_bsize * st.f_blocks;
@@ -1199,7 +1198,7 @@ out_toctou:
             /*
              * Fallback XXX:
              *  fmt contains format specifier
-             *  can it leads to kernel panic due to luck of adequate argument(s)
+             * Q: Can it leads to kernel panic due to luck of adequate argument(s)
              */
             msg = (char *) fmt;
         } else {
