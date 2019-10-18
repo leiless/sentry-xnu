@@ -490,36 +490,26 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     }
 }
 
-static const char *PE_Video_rotations[] = {
-    "normal", "right_90_deg", "flip", "left_90_deg"
-};
-
 /**
  * XXX: PE_Video seems only denotes primary screen(if you have multiple monitors) and immutable after os booted
  */
 static void populate_PE_Video(cJSON *device)
 {
     int n;
-    char buf[16];
+    char buf[96];
     PE_Video v = PE_state.video;
 
     kassert_nonnull(device);
 
-    n = snprintf(buf, sizeof(buf), "%lu x %lu", v.v_width, v.v_height);
-    kassert(n > 0);
-
-    (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "screen_resolution", buf, NULL);
-    (void) cJSON_H_AddBoolToObject(device, CJH_CONST_LHS, "PE_Video.v_display", !!v.v_display, NULL);
-
-    if (v.v_rotate < ARRAY_SIZE(PE_Video_rotations)) {
-        (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS | CJH_CONST_RHS,
-                    "PE_Video.v_rotate", PE_Video_rotations[v.v_rotate], NULL);
-    } else {
-        (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_rotate", v.v_rotate, NULL);
-    }
-
     /* [NSScreen backingScaleFactor] > 1.0 means Retina screen */
-    (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "PE_Video.v_scale", v.v_scale, NULL);
+    n = snprintf(buf, sizeof(buf),
+            "resolution: %lu x %lu\n"
+            " v_display: %lu\n"
+            "    rotate: %d\n"
+            "     scale: %d",
+                v.v_width, v.v_height, v.v_display, v.v_rotate, v.v_scale);
+    kassert(n > 0);
+    (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "PE_Video", buf, NULL);
 }
 
 #define KERN_ADDR_MASK      0xfffffffffff00000LLU
