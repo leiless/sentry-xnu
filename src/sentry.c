@@ -470,22 +470,17 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
         }
     }
 
-    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->address);
-    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "address_begin", buf, NULL);
+    (void) snprintf(buf, sizeof(buf),
+                "   begin: %#llx\n     end: %#llx\n    size: %#llx\nhdr_size: %#llx",
+                        (uint64_t) ki->address,
+                        (uint64_t) ki->address + ki->size,
+                        (uint64_t) ki->size,
+                        (uint64_t) ki->hdr_size);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "address", buf, NULL);
 
-    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->address + ki->size);
-    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "address_end", buf, NULL);
-
-    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->size);
-    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "size", buf, NULL);
-
-    (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "hdr_size", ki->hdr_size, NULL);
-
-    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->start);
-    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func_start", buf, NULL);
-
-    (void) snprintf(buf, sizeof(buf), "%#llx", (uint64_t) ki->stop);
-    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func_stop", buf, NULL);
+    (void) snprintf(buf, sizeof(buf), "start: %#llx\n stop: %#llx",
+                        (uint64_t) ki->start, (uint64_t) ki->stop);
+    (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS, "func", buf, NULL);
 
     e = find_LC_UUID(ki->address, ki->size, MACHO_SET_UUID_FAIL, uuid);
     if (e == 0) {
@@ -590,9 +585,7 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
     device = cJSON_AddObjectToObject(contexts, "device");
     if (device != NULL) {
-        if (sysctlbyname_u64("hw.memsize", &u64)) {
-            (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", u64, NULL);
-        }
+        (void) cJSON_H_AddNumberToObject(device, CJH_CONST_LHS, "memory_size", max_mem, NULL);
 
         /* see: xnu/bsd/vm/vm_unix.c */
         if (sysctlbyname_u32("vm.pages", &u32) && sysctlbyname_i32("vm.pagesize", &i32)) {
