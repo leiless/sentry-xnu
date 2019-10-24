@@ -656,21 +656,6 @@ static void ctx_populate(cJSON *ctx, kmod_info_t * __nullable ki)
 
         if (PEGetModelName(str, sizeof(str)) || sysctlbyname_string("hw.model", str, sizeof(str))) {
             (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "model", str, NULL);
-
-#if 0
-            /*
-             * System Reports Kernel_*.panic hint:
-             *  System model name: MODEL_NAME (hw.targettype-gPlatformECID)
-             *
-             * see:
-             *  xnu/osfmk/arm/model_dep.c#do_print_all_backtraces()
-             *  xnu/osfmk/kern/debug.c#panic_display_system_configuration()
-             */
-            const uint8_t * const u = gPlatformECID;
-            (void) snprintf(str, sizeof(str), "%02x%02x%02x%02x%02x%02x%02x%02x",
-                        u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
-            (void) cJSON_H_AddStringToObject(device, CJH_CONST_LHS, "model_id", str, NULL);
-#endif
         }
 
         if (!PEGetMachineName(str, sizeof(str))) populate_model_name(str);
@@ -764,7 +749,7 @@ static bool sentry_ctx_clear(void *handle)
  * TODO: implement an in-kernel gethostbyname()
  */
 int sentry_new(
-        void **handlep,
+        void * __nullable *handlep,
         const char *dsn,
         uint32_t sample_rate,
         kmod_info_t * __nullable ki)
@@ -1334,7 +1319,7 @@ void sentry_capture_exception(void *handle, uint32_t flags, const char *fmt, ...
  */
 static hook_func __nullable set_send_hook(
         void *handle,
-        hook_func hook,
+        hook_func __nullable hook,
         void *cookie,
         uint32_t index)
 {
@@ -1364,16 +1349,16 @@ static hook_func __nullable set_send_hook(
  */
 hook_func sentry_set_pre_send_hook(
         void *handle,
-        hook_func hook,
-        void *cookie)
+        hook_func __nullable hook,
+        void * __nullable cookie)
 {
     return set_send_hook(handle, hook, cookie, PRE_HOOK);
 }
 
 hook_func sentry_set_post_send_hook(
     void *handle,
-    hook_func hook,
-    void *cookie)
+    hook_func __nullable hook,
+    void * __nullable cookie)
 {
     return set_send_hook(handle, hook, cookie, POST_HOOK);
 }
