@@ -57,7 +57,31 @@ typedef struct {
 
     socket_t __nonnull so;
     volatile UInt32 connected;
+
+    volatile SInt64 counter;  /* Active counter, -1 means invalidated */
 } sentry_t;
+
+/**
+ * @return      value before increase
+ *              -1 if counter invalidated
+ */
+static SInt64 sentry_counter_get(sentry_t * __nonnull h)
+{
+    kassert_nonnull(h);
+    if (h->counter < 0) {
+        kassertf(h->counter == -1, "Bad counter for get: %lld", h->counter);
+        return -1;
+    }
+    return OSIncrementAtomic64(&h->counter);
+}
+
+static void sentry_counter_put(sentry_t * __nonnull h)
+{
+    SInt64 old;
+    kassert_nonnull(h);
+    old = OSDecrementAtomic64(&h->counter);
+    kassertf(old > 0, "Bad count for put: %lld", old);
+}
 
 void sentry_debug(void *handle)
 {
@@ -66,6 +90,8 @@ void sentry_debug(void *handle)
     char * __nullable ctx;
 
     kassert_nonnull(h);
+
+    if (sentry_counter_get(h) < 0) return;
 
     uuid_unparse_lower(h->last_event_id, u);
     ctx = cJSON_Print(h->ctx);
@@ -84,6 +110,8 @@ void sentry_debug(void *handle)
                 h->so, ctx);
 
     util_zfree(ctx);
+
+    sentry_counter_put(h);
 }
 
 #define HTTP_PORT       80
@@ -185,10 +213,19 @@ static bool parse_dsn(sentry_t *handle, const char *dsn)
 void sentry_get_last_event_id(void *handle, uuid_t out)
 {
     sentry_t *h = (sentry_t *) handle;
+
     kassert_nonnull(h, out);
+
+    if (sentry_counter_get(h) < 0) {
+        (void) memset(out, 0, sizeof(uuid_t));
+        return;
+    }
+
     lck_rw_lock_exclusive(h->lck_rw);
     (void) memcpy(out, h->last_event_id, sizeof(uuid_t));
     lck_rw_unlock_exclusive(h->lck_rw);
+
+    sentry_counter_put(h);
 }
 
 void sentry_get_last_event_id_string(void *handle, uuid_string_t out)
@@ -281,6 +318,9 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     UNUSED(waitf);
 
     h = (sentry_t *) cookie;
+
+    if (sentry_counter_get(h) < 0) return;
+
     kassertf(so == h->so, "[upcall] Bad cookie  %p vs %p", so, h->so);
 
     if (!sock_isconnected(so)) {
@@ -292,11 +332,11 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         LOG_ERR("[upcall] socket not connected  errno: %d", optval);
 
         (void) OSBitAndAtomic(0, &h->connected);
-        return;
+        goto out_put;
     } else {
         if (OSCompareAndSwap(0, 1, &h->connected)) {
             LOG_DBG("[upcall] socket %p is connected!", so);
-            return;
+            goto out_put;
         }
     }
 
@@ -310,7 +350,7 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
 
         if (optval == 0) {
             LOG_DBG("[upcall] SO_NREAD = 0, nothing to read");
-            return;
+            goto out_put;
         }
 
         LOG_DBG("[upcall] SO_NREAD: %d", optval);
@@ -325,6 +365,9 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         LOG("[upcall] Response (size: %zu)\n%s", strlen(buf), buf);
         parse_http_response(h, buf);
     }
+
+out_put:
+    sentry_counter_put(h);
 }
 
 ssize_t sysctlbyname_size(const char *name)
@@ -835,18 +878,26 @@ out_oom:
     goto out_exit;
 }
 
-void sentry_destroy(void *handle)
+void sentry_destroy(void * __nullable handle)
 {
     sentry_t *h = (sentry_t *) handle;
-    if (h != NULL) {
-        so_destroy(h->so, SHUT_RDWR);
 
-        cJSON_Delete(h->ctx);
-        lck_rw_free(h->lck_rw, h->lck_grp);
-        lck_grp_free(h->lck_grp);
+    if (h == NULL) return;
 
-        util_mfree(h);
+    /* Counter can't get anymore once it invalidated */
+    while (!OSCompareAndSwap64(0, (UInt64) -1, (volatile UInt64 *) &h->counter)) {
+        while (h->counter > 0) {
+            (void) usleep(200 * USEC_PER_MSEC);
+        }
     }
+
+    so_destroy(h->so, SHUT_RDWR);
+
+    cJSON_Delete(h->ctx);
+    lck_rw_free(h->lck_rw, h->lck_grp);
+    lck_grp_free(h->lck_grp);
+
+    util_mfree(h);
 }
 
 /**
@@ -856,11 +907,20 @@ void sentry_destroy(void *handle)
  *      Or alternatively, do it in sentry_set_*_send_hook()
  * see: https://docs.sentry.io/development/sdk-dev/event-payloads/
  */
-cJSON * __nonnull sentry_ctx_get(void * __nonnull handle)
+cJSON * __nullable sentry_ctx_get(void * __nonnull handle)
 {
     sentry_t *h = (sentry_t *) handle;
+    cJSON *ctx;
+
     kassert_nonnull(h);
-    return h->ctx;
+
+    if (sentry_counter_get(h) < 0) return NULL;
+
+    ctx = h->ctx;
+
+    sentry_counter_put(h);
+
+    return ctx;
 }
 
 static const char * const event_levels[] = {
@@ -1149,11 +1209,7 @@ static void capture_message_ap(
     kassert_nonnull(h, fmt);
 
     if (!h->connected) {
-        /*
-         * TODO:
-         *  we should push messages to a linked list if socket not yet ready?
-         *  and linger some time before socket got so_destroy()
-         */
+        /* TODO: push messages into a linked list if socket not yet ready? */
         LOG_WARN("Skip capture message since handle %p isn't connected", h);
         return;
     }
@@ -1250,17 +1306,27 @@ out_toctou:
 void sentry_capture_message(void *handle, uint32_t flags, const char *fmt, ...)
 {
     va_list ap;
+
+    if (sentry_counter_get(handle) < 0) return;
+
     va_start(ap, fmt);
     capture_message_ap(handle, flags, fmt, ap);
     va_end(ap);
+
+    sentry_counter_put(handle);
 }
 
 void sentry_capture_exception(void *handle, uint32_t flags, const char *fmt, ...)
 {
     va_list ap;
+
+    if (sentry_counter_get(handle) < 0) return;
+
     va_start(ap, fmt);
     capture_message_ap(handle, flags | FLAG_ENCLOSE_BT, fmt, ap);
     va_end(ap);
+
+    sentry_counter_put(handle);
 }
 
 /**
@@ -1275,12 +1341,18 @@ static hook_func __nullable set_send_hook(
     sentry_t *h = (sentry_t *) handle;
     hook_func prev;
     kassert_nonnull(h);
+
+    if (sentry_counter_get(h) < 0) return NULL;
+
     kassertf(index < ARRAY_SIZE(h->hook), "Bad index %u", index);
     lck_rw_lock_exclusive(h->lck_rw);
     prev = h->hook[index];
     h->hook[index] = hook;
     h->cookie[index] = hook ? cookie : NULL;
     lck_rw_unlock_exclusive(h->lck_rw);
+
+    sentry_counter_put(h);
+
     return prev;
 }
 
