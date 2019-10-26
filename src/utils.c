@@ -175,6 +175,7 @@ int tolower(int c)
 
 /**
  * striprefix(s, "") return true
+ * see: strprefix()
  */
 bool striprefix(const char *s1, const char *s2)
 {

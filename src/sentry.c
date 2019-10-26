@@ -444,6 +444,12 @@ static errno_t vfsstatfs_root(struct vfsstatfs *out_st)
     rootvn = vfs_rootvnode();
     if (rootvn != NULL) {
         mnt = vnode_mount(rootvn);
+        /*
+         * [sic]
+         *  Note that the data in the structure will continue to change
+         *  over time and also that it may be quite stale if
+         *  vfs_update_vfsstat has not been called recently.
+         */
         st = vfs_statfs(mnt);
 
         /* Perform atomic vfsstatfs snapshot */
@@ -470,6 +476,7 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     uuid_string_t uuid;
     int n;
     errno_t e;
+    cJSON *ref_list;
 
     kassert_nonnull(contexts);
     if (ki == NULL) return;
@@ -482,16 +489,7 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "name", ki->name, NULL);
     (void) cJSON_H_AddStringToObject(kext, CJH_CONST_LHS | CJH_CONST_RHS, "version", ki->version, NULL);
 
-#if 0
-    k = ki;
-    while (k != NULL) {
-        e = find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
-        if (e != 0) LOG_ERR("find_LC_UUID() fail  %u %s %s %#lx %#lx", k->id, k->name, k->version, k->address, k->size);
-        k = k->next;
-    }
-#endif
-
-    cJSON *ref_list = cJSON_CreateArray();
+    ref_list = cJSON_CreateArray();
     if (ref_list != NULL) {
         kr = ki->reference_list;
         while (kr != NULL) {
@@ -573,7 +571,7 @@ static void kernel_get_bases(cJSON *os)
     __hib = ((uint64_t) bcopy) & KERN_ADDR_MASK;
     kernel = __hib + KERN_BASE_STEP;
 
-    /* This line may cause kernel panic due to page fault */
+    /* XXX: This line may cause kernel panic due to page fault */
     t = *((uint32_t *) kernel);
 
     /* Only supported 64-bit Mach-O kernel */
