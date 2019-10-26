@@ -36,14 +36,6 @@ cJSON * __nullable cJSON_H_AddNumberToObject(
     int * __nullable
 );
 
-cJSON * __nullable cJSON_H_AddBoolToObject(
-    cJSON *  __nonnull const,
-    uint32_t,
-    const char *  __nonnull const,
-    bool,
-    int * __nullable
-);
-
 bool cJSON_H_AddItemToArray(cJSON * __nonnull, cJSON * __nullable);
 
 bool cJSON_H_AddItemToObjectCS(

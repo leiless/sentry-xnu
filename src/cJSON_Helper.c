@@ -149,65 +149,6 @@ out_exit:
     return num_item;
 }
 
-cJSON * __nullable cJSON_H_AddBoolToObject(
-        cJSON * const obj,
-        uint32_t flags,
-        const char * const name,
-        bool value,
-        int * __nullable error)
-{
-    cJSON *bool_item = NULL;
-    cJSON *found;
-
-    kassert_nonnull(obj, name);
-
-    found = cJSON_GetObjectItem(obj, name);
-
-    if ((flags & CJH_CREATE) && found) {
-        if (error != NULL) *error = EEXIST;
-        goto out_exit;
-    }
-
-    if ((flags & CJH_REPLACE) && !found) {
-        if (error != NULL) *error = ENOENT;
-        goto out_exit;
-    }
-
-    bool_item = cJSON_CreateBool(value);
-    if (unlikely(bool_item == NULL)) {
-        if (error != NULL) *error = ENOMEM;
-        goto out_exit;
-    }
-
-    if (flags & CJH_CONST_LHS) {
-        if ((flags & CJH_REPLACE) || found) {
-            cJSON_ReplaceItemInObject(obj, name, bool_item);
-        } else {
-            /* cJSON_AddItemToObjectCS() always success if `name' key is constant */
-            cJSON_AddItemToObjectCS(obj, name, bool_item);
-        }
-    } else {
-        if ((flags & CJH_REPLACE) || found) {
-            cJSON_ReplaceItemInObject(obj, name, bool_item);
-        } else {
-            cJSON_AddItemToObject(obj, name, bool_item);
-
-            /* cJSON_AddItemToObject()'s call to cJSON_strdup() may fail */
-            found = cJSON_GetObjectItem(obj, name);
-            if (!found) {
-                cJSON_Delete(bool_item);
-                bool_item = NULL;
-                if (error != NULL) *error = ENOMEM;
-                goto out_exit;
-            }
-            kassertf(found == bool_item, "Concurrent update for name = '%s'?!  %p vs %p", name, found, bool_item);
-        }
-    }
-
-out_exit:
-    return bool_item;
-}
-
 bool cJSON_H_AddItemToArray(cJSON *arr, cJSON * __nullable item)
 {
     int count;
