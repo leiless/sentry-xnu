@@ -1088,7 +1088,7 @@ out_toctou:
 
     data = util_malloc(n + 1);
     if (data == NULL) {
-        LOG_ERR("util_malloc() fail  size: %d", n);
+        LOG_ERR("util_malloc() fail  size: %d", n + 1);
         util_zfree(ctx);
         return;
     }
@@ -1203,7 +1203,6 @@ static void capture_message_ap(
         return;
     }
 
-out_toctou:
     va_copy(ap, ap_in);
     n = vsnprintf(NULL, 0, fmt, ap);
     va_end(ap);
@@ -1218,25 +1217,15 @@ out_toctou:
     } else {
         msg = util_malloc(n + 1);
         if (unlikely(msg == NULL)) {
-            /*
-             * Fallback XXX:
-             *  fmt contains format specifier
-             * Q: Can it leads to kernel panic due to luck of adequate argument(s)
-             */
+            /* Fallback to print format string? */
             msg = (char *) fmt;
         } else {
             va_copy(ap, ap_in);
             n2 = vsnprintf(msg, n + 1, fmt, ap);
             va_end(ap);
             kassertf(n2 >= 0, "vsnprintf() #2 fail  n: %d", n2);
-
-            if (unlikely(n2 > n)) {
-                util_mfree(msg);
-                /* NOTE: we may overcommit some bytes to prevent potential TOCTOU attacks */
-                goto out_toctou;
-            }
-
-            n = n2; /* Correct n to its final value, in case we use it later */
+            /* Currently only possible case is the '%s' format specifier */
+            kassertf(n2 == n, "Format arguments got modified in other thread?! %d vs %d", n2, n);
         }
     }
 
