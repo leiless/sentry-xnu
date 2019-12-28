@@ -184,5 +184,10 @@ extern void populate_model_name(char * __nonnull);
 
 char * __nullable kmp_strstr(const char * __nonnull, const char * __nonnull);
 
+int kcb_get(void);
+int kcb_put(void);
+int kcb_read(void);
+void kcb_invalidate(void);
+
 #endif /* SENTRY_XNU_UTILS_H */
 
