@@ -24,6 +24,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
 
+    /* DNS A record of sentry.io: 35.188.42.15 */
     e = sentry_new(&handle,
             "HttP://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302",
             100 ,ki);
