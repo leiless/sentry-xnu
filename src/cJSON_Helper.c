@@ -204,7 +204,7 @@ bool cJSON_H_DeleteItemFromObject(
     }
     va_end(ap);
 
-    kassertf(i == count, "%zu vs %zu", i, count);
+    kassert_eq(i, count, "%zu", "%zu");
 
     kassert_nonnull(s);
     cJSON_DeleteItemFromObject(o, s);

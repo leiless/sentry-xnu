@@ -843,7 +843,7 @@ int sentry_new(
     sentry_debug(h);
     *handlep = h;
 
-    kassertf(e == 0, "expected errno == 0, got %d", e);
+    kassert_eq(e, 0, "%d", "%d");
 out_exit:
     return e;
 out_socket:
@@ -857,7 +857,7 @@ out_lck_grp:
 out_free:
     util_mfree(h);
 out_oom:
-    kassertf(e != 0, "expected errno != 0, got 0");
+    kassert_ne(e, 0, "%d", "%d");
     goto out_exit;
 }
 
@@ -1206,7 +1206,7 @@ static void capture_message_ap(
     va_copy(ap, ap_in);
     n = vsnprintf(NULL, 0, fmt, ap);
     va_end(ap);
-    kassertf(n >= 0, "vsnprintf() #1 fail  n: %d", n);
+    kassertf(n >= 0, "vsnprintf() fail  n: %d", n);
 
     if (strchr(fmt, '%') == NULL) {
         /*
@@ -1223,7 +1223,7 @@ static void capture_message_ap(
             va_copy(ap, ap_in);
             n2 = vsnprintf(msg, n + 1, fmt, ap);
             va_end(ap);
-            kassertf(n2 >= 0, "vsnprintf() #2 fail  n: %d", n2);
+            kassertf(n2 >= 0, "vsnprintf() fail  n: %d", n2);
             /* Currently only possible case is the '%s' format specifier */
             kassertf(n2 == n, "Format arguments got modified in other thread?! %d vs %d", n2, n);
         }
@@ -1316,7 +1316,7 @@ static hook_func __nullable set_send_hook(
 
     if (sentry_counter_get(h) < 0) return NULL;
 
-    kassertf(index < ARRAY_SIZE(h->hook), "Bad index %u", index);
+    kassert_lt(index, ARRAY_SIZE(h->hook), "%u", "%zu");
     lck_rw_lock_exclusive(h->lck_rw);
     prev = h->hook[index];
     h->hook[index] = hook;

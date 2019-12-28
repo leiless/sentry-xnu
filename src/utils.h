@@ -83,6 +83,7 @@
 })
 
 #ifdef DEBUG
+
 /*
  * NOTE: Do NOT use any multi-nary conditional/logical operator inside assertion
  *       like operators && || ?:  it's extremely EVIL
@@ -98,12 +99,15 @@
  */
 #define kassertf(ex, fmt, ...) \
     (ex) ? (void) 0 : panicf("Assert `%s' failed: " fmt, #ex, ##__VA_ARGS__)
+
 #else
+
 #define kassert(ex) (ex) ? (void) 0 : LOG_BUG("Assert `%s' failed", #ex)
 
 #define kassertf(ex, fmt, ...) \
     (ex) ? (void) 0 : LOG_BUG("Assert `%s' failed: " fmt, #ex, ##__VA_ARGS__)
-#endif
+
+#endif      /* DEBUG */
 
 void * __nonnull _kassert_nonnull(const void * __nonnull, ...)      \
     __deprecated_msg("Use kassert_nonnull() macro");
@@ -115,7 +119,17 @@ void * __nonnull _kassert_nonnull(const void * __nonnull, ...)      \
     _Pragma("GCC diagnostic pop")                                   \
 }
 
-#define kassert_eq(v1, v2)      kassertf(v1 == v2, "%#lx vs %#lx", (ssize_t) v1, (ssize_t) v2)
+
+#define __kassert_cmp(v1, v2, f1, f2, op)   \
+    kassertf((v1) op (v2), "left: " f1 " right: " f2, (v1), (v2))
+
+#define kassert_eq(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, ==)
+#define kassert_ne(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, !=)
+#define kassert_le(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, <=)
+#define kassert_ge(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, >=)
+#define kassert_lt(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, <)
+#define kassert_gt(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, >)
+
 
 /*
  * non DEVELOPMENT/DEBUG kernel(s) will hide kernel addresses since macOS 10.11

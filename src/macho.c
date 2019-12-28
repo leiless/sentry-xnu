@@ -75,7 +75,7 @@ static int find_LC_UUID0(buffer_t *buf, bool swap, uuid_string_t uuid)
             continue;
         }
 
-        kassert_eq(s32(cmd->cmdsize), sizeof(*ucmd));
+        kassert_eq(s32(cmd->cmdsize), sizeof(*ucmd), "%u", "%zu");
         ucmd = macho_read(buf, off, sizeof(*ucmd));
         uuid_unparse(ucmd->uuid, uuid);
         LOG_DBG("LC index %u UUID: %s", i, uuid);
