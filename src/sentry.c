@@ -345,8 +345,7 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
     if (e != 0) {
         LOG_ERR("[upcall] sock_getsockopt() SO_NREAD fail  errno: %d", e);
     } else {
-        kassertf(optlen == sizeof(optval),
-            "[upcall] sock_getsockopt() SO_NREAD optlen = %d?", optlen);
+        kassert_eq(optlen, sizeof(optval), "%d", "%zu");
 
         if (optval == 0) {
             LOG_DBG("[upcall] SO_NREAD = 0, nothing to read");
@@ -382,13 +381,15 @@ ssize_t sysctlbyname_size(const char *name)
 static bool sysctlbyname_i32(const char *name, int *out)
 {
     int e;
-    size_t len = 4;
+    size_t len = sizeof(*out);
     kassert_nonnull(name, out);
     e = sysctlbyname(name, out, &len, NULL, 0);
     if (e != 0) {
         LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
     } else {
-        kassertf(len == 4, "bad sysctl %s len  expected 4, got %zu", name, len);
+        kassertf(len == sizeof(*out),
+            "bad sysctl %s len  expected %zu, got %zu",
+            name, sizeof(*out), len);
     }
     return e == 0;
 }
@@ -412,7 +413,9 @@ static bool sysctlbyname_u64(const char *name, uint64_t *u64)
     if (e != 0) {
         LOG_ERR("sysctlbyname() %s fail  errno: %d", name, e);
     } else {
-        kassertf(len == sizeof(*u64), "bad sysctl %s len  expected %zu, got %zu", name, sizeof(*u64), len);
+        kassertf(len == sizeof(*u64),
+            "bad sysctl %s len  expected %zu, got %zu",
+            name, sizeof(*u64), len);
     }
     return e == 0;
 }
@@ -963,7 +966,9 @@ static int format_event_data(
             "Content-Length: %zu\r\n"
             "\r\n%s",
             h->projid, SENTRY_PROTO_VER, time(NULL), h->pubkey, ctx_len, ctx);
-    kassertf(n > 0, "snprintf() fail  n: %d", n);
+
+    kassert_gt(n, 0, "%d", "%d");
+
     return n;
 }
 
@@ -1199,7 +1204,7 @@ static void capture_message_ap(
     va_copy(ap, ap_in);
     n = vsnprintf(NULL, 0, fmt, ap);
     va_end(ap);
-    kassertf(n >= 0, "vsnprintf() fail  n: %d", n);
+    kassert_ge(n, 0, "%d", "%d");
 
     if (strchr(fmt, '%') == NULL) {
         /*
@@ -1216,7 +1221,8 @@ static void capture_message_ap(
             va_copy(ap, ap_in);
             n2 = vsnprintf(msg, n + 1, fmt, ap);
             va_end(ap);
-            kassertf(n2 >= 0, "vsnprintf() fail  n: %d", n2);
+
+            kassert_gt(n2, 0, "%d", "%d");
             /* Currently only possible case is the '%s' format specifier */
             kassertf(n2 == n, "Format arguments got modified in other thread?! %d vs %d", n2, n);
         }

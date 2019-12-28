@@ -95,7 +95,7 @@
  * @ex      the expression
  * @fmt     panic message format
  *
- * Example: kassertf(sz > 0, "Why size %zd non-positive?", sz);
+ * Example: kassertf(sz == 4 || sz == 8, "Bad size %zu?!", sz);
  */
 #define kassertf(ex, fmt, ...) \
     (ex) ? (void) 0 : panicf("Assert `%s' failed: " fmt, #ex, ##__VA_ARGS__)

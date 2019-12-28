@@ -21,7 +21,7 @@ static void *macho_read(buffer_t *buf, vm_offset_t offset, size_t size)
 {
     kassert_nonnull(buf);
     kassert_nonnull(buf->data);
-    kassertf(offset >= 0, "Negative offset %#lx", offset);
+    kassert_ge(offset, 0, "%#lx", "%d");
     if (offset + size <= + buf->size) return buf->data + offset;
     panicf("macho_read() fail  offset: %ld size: %zd", offset, buf->size);
 }

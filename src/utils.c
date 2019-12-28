@@ -290,7 +290,7 @@ int fmt_iso8601_time0(clock_sec_t t, char *buf, size_t sz)
     n = snprintf(buf, sz, "%04u-%02u-%02uT%02u:%02u:%02u",
                     tm.year + EPOCH_YEAR, tm.month + 1, tm.day + 1,
                     tm.hour, tm.minute, tm.sec);
-    kassertf(n >= 0, "snprintf() fail  n: %d", n);
+    kassert_gt(n, 0, "%d", "%d");
 
 out_exit:
     return e;
@@ -328,7 +328,7 @@ uint32_t urand32(uint32_t lo, uint32_t hi)
 {
     uint32_t u;
     int e;
-    kassertf(lo < hi, "Misuse of urand32()  %#x vs %#x", lo, hi);
+    kassert_lt(lo, hi, "%u", "%u");
     e = random_buf(&u, sizeof(u));
     /*
      * Fallback to random() if random_buf() failed
