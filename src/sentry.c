@@ -1083,9 +1083,7 @@ static void post_event(sentry_t *h)
     cJSON_Minify(ctx);
     ctx_len = strlen(ctx);
 
-out_toctou:
     n = format_event_data(h, ctx, ctx_len, NULL, 0);
-
     data = util_malloc(n + 1);
     if (data == NULL) {
         LOG_ERR("util_malloc() fail  size: %d", n + 1);
@@ -1094,12 +1092,7 @@ out_toctou:
     }
 
     n2 = format_event_data(h, ctx, ctx_len, data, n + 1);
-    if (n2 > n) {
-        util_mfree(data);
-        goto out_toctou;
-    }
-    n = n2; /* Correct n to its final value, in case we use it later */
-    kassertf((size_t) n == strlen(data), "Bad data length  %d vs %zu", n, strlen(data));
+    kassert_eq(n, n2, "%d", "%d");
 
     util_zfree(ctx);
 
