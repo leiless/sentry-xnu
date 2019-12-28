@@ -42,14 +42,14 @@ void sentry_capture_message(
     uint32_t,
     const char * __nonnull,
     ...
-);
+) __printflike(3, 4);
 
 void sentry_capture_exception(
     void * __nonnull,
     uint32_t,
     const char * __nonnull,
     ...
-);
+) __printflike(3, 4);
 
 typedef void (*hook_func)(
     void * __nonnull,
