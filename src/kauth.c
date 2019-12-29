@@ -12,6 +12,20 @@
 
 #include "kauth.h"
 #include "utils.h"
+#include "sentry.h"
+#include "sentry_xnu.h"
+
+#define __T_LOG(flags, fmt, ...)    \
+    do {                            \
+        printf_no_hide_ptr(KEXTNAME_S ": " fmt " <%s@%s()#%d>\n", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);            \
+        sentry_capture_message(sentry_handle, flags, fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);    \
+    } while (0)
+
+#define T_LOG(fmt, ...)         __T_LOG(SEL_INF, "[INF] " fmt, ##__VA_ARGS__)
+#define T_LOG_WARN(fmt, ...)    __T_LOG(SEL_WAN, "[WARN] " fmt, ##__VA_ARGS__)
+#define T_LOG_ERR(fmt, ...)     __T_LOG(SEL_ERR, "[ERR] " fmt, ##__VA_ARGS__)
+#define T_LOG_BUG(fmt, ...)    	__T_LOG(SEL_FTL, "[BUG] " fmt, ##__VA_ARGS__)
+#define T_LOG_TRACE(fmt, ...)   __T_LOG(SEL_DBG, "[TRACE] " fmt, ##__VA_ARGS__)
 
 typedef struct {
     errno_t e;
@@ -187,7 +201,7 @@ static int vnode_scope_cb(
 
     vpath = make_vnode_path(vp);
     if (vpath.e != 0) {
-        LOG_ERR("make_vnode_path() fail  vp: %p vid: %#x vt: %d",
+        T_LOG_ERR("make_vnode_path() fail  vp: %p vid: %#x vt: %d",
                     vp, vnode_vid(vp), vnode_vtype(vp));
         goto out_put;
     }
@@ -342,7 +356,7 @@ kern_return_t kauth_register(void)
         scope_ref[i] = kauth_listen_scope(scope_name[i], scope_cb[i], NULL);
         if (scope_ref[i] == NULL) {
             r = KERN_FAILURE;
-            LOG_ERR("kauth_listen_scope() fail  scope: %s", scope_name[i]);
+            T_LOG_ERR("kauth_listen_scope() fail  scope: %s", scope_name[i]);
             kauth_deregister();
             break;
         }

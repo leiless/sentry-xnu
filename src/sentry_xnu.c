@@ -24,7 +24,7 @@ static void * __nullable sentry_test_new(kmod_info_t * __nullable ki)
     return handle;
 }
 
-static void *handle;
+void *sentry_handle;
 #endif  /* DEBUG */
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
@@ -41,8 +41,8 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
 
 #ifdef DEBUG
-    handle = sentry_test_new(ki);
-    if (handle == NULL) goto out_fail;
+    sentry_handle = sentry_test_new(ki);
+    if (sentry_handle == NULL) goto out_fail;
 
     if (kauth_register() != 0) goto out_sentry;
 #endif
@@ -50,7 +50,7 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
     return KERN_SUCCESS;
 #ifdef DEBUG
 out_sentry:
-    sentry_destroy(handle);
+    sentry_destroy(sentry_handle);
 out_fail:
     return KERN_FAILURE;
 #endif
@@ -63,7 +63,7 @@ kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
 #ifdef DEBUG
     /* Order matters, KAuth must be deregister before Sentry */
     kauth_deregister();
-    sentry_destroy(handle);
+    sentry_destroy(sentry_handle);
 #endif
 
     util_zassert();
