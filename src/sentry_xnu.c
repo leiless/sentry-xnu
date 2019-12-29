@@ -8,6 +8,22 @@
 
 #include "utils.h"
 #include "sentry.h"
+#include "kauth.h"
+
+#ifdef DEBUG
+/* DNS A record of sentry.io: 35.188.42.15 */
+#define SENTRY_DSN_TEST     "http://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302"
+
+#define SAMPLE_RATE_TEST    100
+
+static void * __nullable sentry_alloc_init(kmod_info_t * __nullable ki)
+{
+    void *handle = NULL;
+    int e = sentry_new(&handle, SENTRY_DSN_TEST, SAMPLE_RATE_TEST ,ki);
+    if (e != 0) LOG_ERR("sentry_new() fail  errno: %d", e);
+    return handle;
+}
+#endif  /* DEBUG */
 
 kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 {
@@ -24,7 +40,6 @@ kern_return_t sentry_xnu_start(kmod_info_t *ki, void *d)
 
     BUILD_BUG_ON(sizeof(struct sockaddr) != sizeof(struct sockaddr_in));
 
-    /* DNS A record of sentry.io: 35.188.42.15 */
     e = sentry_new(&handle,
             "HttP://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302",
             100 ,ki);

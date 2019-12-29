@@ -1053,9 +1053,10 @@ static void builtin_pre_send_hook(sentry_t *h)
         populate_uptime_string(os, u64);
     }
 
-    if (kext != NULL) {
+    if (kext != NULL && h->ki != NULL) {
         /* # linkage refs to this kext */
-        (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS, "ref_count", h->ki->reference_count, NULL);
+        (void) cJSON_H_AddNumberToObject(kext, CJH_CONST_LHS,
+                    "ref_count", h->ki->reference_count, NULL);
     }
 }
 
@@ -1153,8 +1154,13 @@ static void enclose_backtrace(sentry_t *h)
      */
     for (i = 0; i < nframe; i++) {
         a = (uint64_t) bt[i];
-        n = snprintf(buf, sizeof(buf), "frame: %#018llx in_kext: %d",
+
+        if (h->ki != NULL) {
+            n = snprintf(buf, sizeof(buf), "frame: %#018llx in_kext: %d",
                     a, a >= h->ki->address && a < h->ki->address + h->ki->size);
+        } else {
+            n = snprintf(buf, sizeof(buf), "frame: %#018llx in_kext: ?", a);
+        }
         kassert(n > 0);
 
         if (!cJSON_H_AddItemToArray(frames, cJSON_CreateString(buf))) break;
