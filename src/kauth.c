@@ -18,6 +18,7 @@
 #define __T_LOG(flags, fmt, ...)    \
     do {                            \
         printf_no_hide_ptr(KEXTNAME_S ": " fmt " <%s@%s()#%d>\n", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);            \
+        kassert_nonnull(sentry_handle);     \
         sentry_capture_message(sentry_handle, flags, fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);    \
     } while (0)
 
@@ -280,7 +281,7 @@ static int fileop_scope_cb(
         path1 = (char * _Nullable) arg0;
         path2 = (char * _Nullable) arg1;
 
-        LOG("fileop  act: %#x(rename) %s -> %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(rename) %s -> %s uid: %u pid: %d %s",
                     act, path1, path2, uid, pid, pcomm);
         break;
 
@@ -288,7 +289,7 @@ static int fileop_scope_cb(
         path1 = (char *) arg0;
         path2 = (char *) arg1;
 
-        LOG("fileop  act: %#x(xchg) %s <=> %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(xchg) %s <=> %s uid: %u pid: %d %s",
                     act, path1, path2, uid, pid, pcomm);
         break;
 
@@ -296,7 +297,7 @@ static int fileop_scope_cb(
         path1 = (char * _Nullable) arg0;
         path2 = (char * _Nullable) arg1;
 
-        LOG("fileop  act: %#x(link) %s ~> %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(link) %s ~> %s uid: %u pid: %d %s",
                     act, path1, path2, uid, pid, pcomm);
         break;
 
