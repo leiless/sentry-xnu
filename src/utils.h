@@ -132,14 +132,6 @@ void * __nonnull _kassert_nonnull(const void * __nonnull, ...)      \
 #define kassert_lt(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, <)
 #define kassert_gt(v1, v2, f1, f2)  __kassert_cmp(v1, v2, f1, f2, >)
 
-
-/*
- * non DEVELOPMENT/DEBUG kernel(s) will hide kernel addresses since macOS 10.11
- * see: xnu/osfmk/kern/printf.c#doprnt_hide_pointers
- */
-#define PRIptr                  "%#010x%08x"
-#define ptr2hex(p)              (uint32_t) ((uint64_t) p >> 32), (uint32_t) p
-
 /**
  * Branch predictions
  * see: linux/include/linux/compiler.h

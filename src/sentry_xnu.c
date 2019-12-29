@@ -58,9 +58,7 @@ out_fail:
 
 kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
 {
-    UNUSED(ki, d);
-
-    LOG_DBG("Unloading... " PRIptr " " PRIptr, ptr2hex(ki), ptr2hex(d));
+    LOG_DBG("Unloading... ki: %p d: %p", ki, d);
 
 #ifdef DEBUG
     /* Order matters, KAuth must be deregister before Sentry */
