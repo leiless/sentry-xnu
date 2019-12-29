@@ -12,8 +12,9 @@
 #ifdef DEBUG
 #include "kauth.h"
 
-/* DNS A record of sentry.io: 35.188.42.15 */
-#define SENTRY_DSN_TEST     "http://3bebc23f79274f93b6500e3ecf0cf22b@35.188.42.15:80/1533302"
+#ifndef SENTRY_DSN_TEST
+#error Please define SENTRY_DSN_TEST macro in Makefile.inc
+#endif
 #define SAMPLE_RATE_TEST    100
 
 static void * __nullable sentry_test_new(kmod_info_t * __nullable ki)
