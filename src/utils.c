@@ -12,6 +12,40 @@
 
 #include "utils.h"
 
+int printf_no_hide_ptr(const char *fmt, ...)
+{
+    va_list ap;
+    int n, n2;
+    char *p;
+
+    kassert_nonnull(fmt);
+
+    if (strchr(fmt, '%') == NULL) {
+out_fallback:
+        va_start(ap, fmt);
+        n = vprintf(fmt, ap);
+        va_end(ap);
+    } else {
+        va_start(ap, fmt);
+        n = vsnprintf(NULL, 0, fmt, ap);
+        va_end(ap);
+        kassert_gt(n, 0, "%d", "%d");
+        p = util_malloc(n + 1);
+        /* Fallback to use vprintf(), may hide pointers by <ptr> placeholder */
+        if (unlikely(p == NULL)) goto out_fallback;
+
+        va_start(ap, fmt);
+        n2 = vsnprintf(p, n + 1, fmt, ap);
+        va_end(ap);
+        kassert_eq(n, n2, "%d", "%d");
+
+        n = printf("%s", p);
+        util_mfree(p);
+    }
+
+    return n;
+}
+
 /**
  * XXX: Must pass _kassert_nonnull at the end of the call, otherwise kernel will panic
  * @return          first argument

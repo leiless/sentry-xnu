@@ -48,6 +48,8 @@
 #define ASSURE_TYPE_ALIAS(a, b) \
     BUILD_BUG_ON(!__builtin_types_compatible_p(__typeof__(a), __typeof__(b)))
 
+int printf_no_hide_ptr(const char * __nonnull, ...) __printflike(1, 2);
+
 /**
  * os_log() is only available on macOS 10.12 or newer
  *  thus os_log do have compatibility issue  use printf instead
@@ -59,7 +61,7 @@
  *
  * see: xnu/osfmk/kern/printf.c#printf
  */
-#define LOG(fmt, ...)        printf(KEXTNAME_S ": " fmt "\n", ##__VA_ARGS__)
+#define LOG(fmt, ...) printf_no_hide_ptr(KEXTNAME_S ": " fmt "\n", ##__VA_ARGS__)
 
 #define ___LOG0(fmt, ...)    \
     LOG(fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__)
