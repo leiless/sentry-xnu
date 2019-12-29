@@ -28,6 +28,15 @@
 #define T_LOG_BUG(fmt, ...)    	__T_LOG(SEL_FTL, "[BUG] " fmt, ##__VA_ARGS__)
 #define T_LOG_TRACE(fmt, ...)   __T_LOG(SEL_DBG, "[TRACE] " fmt, ##__VA_ARGS__)
 
+static inline const char *vtype_string(enum vtype vt)
+{
+    static const char *vtypes[] = {
+        "VNON", "VREG", "VDIR", "VBLK", "VCHR", "VLNK",
+        "VSOCK", "VFIFO", "VBAD", "VSTR", "VCPLX",
+    };
+    return vt < ARRAY_SIZE(vtypes) ? vtypes[vt] : "(?)";
+}
+
 typedef struct {
     errno_t e;
     int len;        /* strlen(path) */
@@ -202,8 +211,10 @@ static int vnode_scope_cb(
 
     vpath = make_vnode_path(vp);
     if (vpath.e != 0) {
-        T_LOG_ERR("make_vnode_path() fail  vp: %p vid: %#x vt: %d",
-                    vp, vnode_vid(vp), vnode_vtype(vp));
+        enum vtype vt;
+        vt = vnode_vtype(vp);
+        T_LOG_ERR("make_vnode_path() fail  error: %d vp: %p vid: %#x vt: %d %s",
+                    vpath.e, vp, vnode_vid(vp), vt, vtype_string(vt));
         goto out_put;
     }
 
@@ -281,7 +292,7 @@ static int fileop_scope_cb(
         path1 = (char * _Nullable) arg0;
         path2 = (char * _Nullable) arg1;
 
-        T_LOG("fileop  act: %#x(rename) %s -> %s uid: %u pid: %d %s",
+        LOG("fileop  act: %#x(rename) %s -> %s uid: %u pid: %d %s",
                     act, path1, path2, uid, pid, pcomm);
         break;
 
