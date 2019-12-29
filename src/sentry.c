@@ -765,8 +765,8 @@ int sentry_new(
         goto out_exit;
     }
 
-    h = util_malloc(sizeof(*h));
-    if (h == NULL) {
+    h = util_malloc0(sizeof(*h), M_WAITOK | M_NULL);
+    if (unlikely(h == NULL)) {
         e = ENOMEM;
         goto out_oom;
     }
@@ -1090,9 +1090,9 @@ static void post_event(sentry_t *h)
     ctx_len = strlen(ctx);
 
     n = format_event_data(h, ctx, ctx_len, NULL, 0);
-    data = util_malloc(n + 1);
-    if (data == NULL) {
-        LOG_ERR("util_malloc() fail  size: %d", n + 1);
+    data = util_malloc0(n + 1, M_WAITOK | M_NULL);
+    if (unlikely(data == NULL)) {
+        LOG_ERR("util_malloc0() fail  size: %d", n + 1);
         util_zfree(ctx);
         return;
     }
@@ -1219,10 +1219,16 @@ static void capture_message_ap(
          */
         msg = (char *) fmt;
     } else {
-        msg = util_malloc(n + 1);
+        /*
+         * M_NULL first introduced in macOS 10.12
+         * kernel will panic if kalloc_canblock() failed for macOS < 10.12
+         * see: xnu/bsd/kern/kern_malloc.c#__MALLOC()
+         */
+        msg = util_malloc0(n + 1, M_WAITOK | M_NULL);
         if (unlikely(msg == NULL)) {
             /* Fallback to print format string? */
             msg = (char *) fmt;
+            LOG_ERR("util_malloc0() fail  size: %d", n + 1);
         } else {
             va_copy(ap, ap_in);
             n2 = vsnprintf(msg, n + 1, fmt, ap);
