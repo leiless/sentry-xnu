@@ -168,8 +168,8 @@ static int process_scope_cb(
         break;
 
     default:
-        panicf("unknown action %#x in process scope", act);
-        __builtin_unreachable();
+        T_LOG_ERR("unknown action %#x in process scope", act);
+        break;
     }
 
 out_put:
@@ -340,8 +340,8 @@ static int fileop_scope_cb(
 #endif
 
     default:
-        panicf("unknown action %#x in fileop scope", act);
-        __builtin_unreachable();
+        T_LOG_ERR("unknown action %#x in fileop scope", act);
+        break;
     }
 
 out_put:
