@@ -328,6 +328,14 @@ static int fileop_scope_cb(
                     act, vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
+    case KAUTH_FILEOP_WILL_RENAME:
+        vp = (vnode_t) arg0;
+        path1 = (char *) arg1;
+        path2 = (char *) arg2;
+        LOG("fileop  act: %#x(will_rename) vp: %p %d %s -> %s uid: %u pid: %d %s",
+                    act, vp, vnode_vtype(vp), path1, path2, uid, pid, pcomm);
+        break;
+
     default:
         panicf("unknown action %#x in fileop scope", act);
         __builtin_unreachable();
