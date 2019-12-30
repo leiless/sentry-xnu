@@ -328,6 +328,8 @@ static int fileop_scope_cb(
                     act, vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
+#if OS_VER_MIN_REQ >= __MAC_10_14
+    /* First introduced in macOS 10.14 */
     case KAUTH_FILEOP_WILL_RENAME:
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
@@ -335,6 +337,7 @@ static int fileop_scope_cb(
         LOG("fileop  act: %#x(will_rename) vp: %p %d %s -> %s uid: %u pid: %d %s",
                     act, vp, vnode_vtype(vp), path1, path2, uid, pid, pcomm);
         break;
+#endif
 
     default:
         panicf("unknown action %#x in fileop scope", act);
