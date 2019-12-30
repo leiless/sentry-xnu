@@ -285,7 +285,7 @@ static inline int ffs_zero(int x)
 static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
 {
     kauth_action_t a;
-    int i, n;
+    int i, n, size;
     bool isdir;
     char *str, *p;
 
@@ -298,27 +298,29 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
     if (act == 0) return "";
 
     a = act;
-    n = 1;
+    size = 1;
     do {
-        n += (int) vn_act_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
+        size += (int) vn_act_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
         a &= (a - 1);
-        if (a != 0) n++;    /* Add a pipe separator */
+        if (a != 0) size++;    /* Add a pipe separator */
     } while (a != 0);
 
-    str = util_malloc0(n, M_WAITOK | M_NULL);
+    str = util_malloc0(size, M_WAITOK | M_NULL);
     if (str == NULL) goto out_exit;
 
     a = act;
     i = 0;
     p = str + i;
     do {
-        i += snprintf(p + i, n - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
-        kassert_gt(i, 0, "%d", "%d");
+        n = snprintf(p + i, size - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
+        kassert_gt(n, 0, "%d", "%d");
+        i += n;
         a &= (a - 1);
         p += i;
         if (a != 0) p[i++] = '|';
     } while (a != 0);
 
+    kassert_eq(i + 1, size, "%d", "%d");
 out_exit:
     return str;
 }
