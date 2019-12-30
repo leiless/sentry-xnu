@@ -198,6 +198,131 @@ out_put:
     return KAUTH_RESULT_DEFER;
 }
 
+#if 0
+
+#define KAUTH_VNODE_READ_DATA            (1<<1)
+#define KAUTH_VNODE_LIST_DIRECTORY        KAUTH_VNODE_READ_DATA
+
+#define KAUTH_VNODE_WRITE_DATA            (1<<2)
+#define KAUTH_VNODE_ADD_FILE            KAUTH_VNODE_WRITE_DATA
+
+#define KAUTH_VNODE_EXECUTE            (1<<3)
+#define KAUTH_VNODE_SEARCH            KAUTH_VNODE_EXECUTE
+
+#define KAUTH_VNODE_DELETE            (1<<4)
+
+#define KAUTH_VNODE_APPEND_DATA            (1<<5)
+#define KAUTH_VNODE_ADD_SUBDIRECTORY        KAUTH_VNODE_APPEND_DATA
+
+#define KAUTH_VNODE_DELETE_CHILD        (1<<6)
+#define KAUTH_VNODE_READ_ATTRIBUTES        (1<<7)
+#define KAUTH_VNODE_WRITE_ATTRIBUTES        (1<<8)
+#define KAUTH_VNODE_READ_EXTATTRIBUTES        (1<<9)
+#define KAUTH_VNODE_WRITE_EXTATTRIBUTES        (1<<10)
+#define KAUTH_VNODE_READ_SECURITY        (1<<11)
+#define KAUTH_VNODE_WRITE_SECURITY        (1<<12)
+
+#define KAUTH_VNODE_TAKE_OWNERSHIP        (1<<13)
+#define KAUTH_VNODE_CHANGE_OWNER        KAUTH_VNODE_TAKE_OWNERSHIP
+
+#define KAUTH_VNODE_SYNCHRONIZE            (1<<20)
+#define KAUTH_VNODE_LINKTARGET            (1<<25)
+#define KAUTH_VNODE_CHECKIMMUTABLE        (1<<26)
+#define KAUTH_VNODE_ACCESS            (1<<31)
+#define KAUTH_VNODE_NOIMMUTABLE            (1<<30)
+#define KAUTH_VNODE_SEARCHBYANYONE        (1<<29)
+
+#endif
+
+#define GET_TYPE_STR     0
+#define GET_TYPE_LEN     1
+
+static inline void *vnode_action_str_one(
+        int type,
+        kauth_action_t a,
+        bool isdir)
+{
+    char *p;
+
+    kassertf(type >= GET_TYPE_STR && type <= GET_TYPE_LEN, "Bad type %#x", type);
+    kassert_ne(a, 0, "%d", "%d");
+    kassertf((a & (a - 1)) == 0, "Only one bit should be set, got %#x", a);
+
+    switch (a) {
+    case KAUTH_VNODE_READ_DATA:
+        BUILD_BUG_ON(KAUTH_VNODE_READ_DATA != KAUTH_VNODE_LIST_DIRECTORY);
+        p = isdir ? "LIST_DIRECTORY" : "READ_DATA";
+        break;
+    case KAUTH_VNODE_WRITE_DATA:
+        BUILD_BUG_ON(KAUTH_VNODE_WRITE_DATA != KAUTH_VNODE_ADD_FILE);
+        p = isdir ? "ADD_FILE" : "WRITE_DATA";
+        break;
+    case KAUTH_VNODE_EXECUTE:
+        BUILD_BUG_ON(KAUTH_VNODE_EXECUTE != KAUTH_VNODE_SEARCH);
+        p = isdir ? "SEARCH" : "EXECUTE";
+        break;
+    // TODO
+    default:
+        panicf("Unrecognized vnode action %#x", a);
+    }
+
+    return type == GET_TYPE_STR ? p : (void *) strlen(p);
+}
+
+static inline int ffs_zero(int x)
+{
+    kassert_ne(x, 0, "%d", "%d");
+    return __builtin_ffs(x) - 1;
+}
+
+/**
+ * Format vnode action into string
+ * @action      The vnode action
+ * @return      String to describe all bits in action
+ *              NULL if OOM
+ *              You're responsible to free the space via util_mfree()
+ */
+static inline char * __nullable vnode_action_str(kauth_action_t act, vnode_t vp)
+{
+    kauth_action_t a;
+    int i, n;
+    bool isdir;
+    char *str, *p;
+
+    kassert_nonnull(vp);
+
+    isdir = vnode_isdir(vp);
+
+    /* Do basic action sanity check */
+    if (act & ~(KAUTH_VNODE_GENERIC_ALL_BITS)) return "(?)";
+    if (act == 0) return "";
+
+    a = act;
+    n = 1;
+    do {
+        n += (int) vnode_action_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
+        a &= (a - 1);
+        if (a != 0) n++;    /* Add a pipe separator */
+    } while (a != 0);
+
+    str = util_malloc0(n, M_WAITOK | M_NULL);
+    if (str == NULL) goto out_exit;
+
+    a = act;
+    i = 0;
+    p = str + i;
+    do {
+        i += snprintf(p + i, n - i, "%s", vnode_action_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
+        kassert_gt(i, 0, "%d", "%d");
+        a &= (a - 1);
+        p += i;
+        if (a != 0) p[i++] = '|';
+    } while (a != 0);
+
+out_exit:
+    return str;
+}
+
 static int vnode_scope_cb(
         kauth_cred_t cred,
         void *idata,
