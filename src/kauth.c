@@ -341,6 +341,7 @@ static int vnode_scope_cb(
     uid_t uid;
     int pid;
     char pcomm[MAXCOMLEN + 1];
+    char *str;
 
     vnode_path_t vpath;
 
@@ -366,8 +367,10 @@ static int vnode_scope_cb(
         goto out_put;
     }
 
-    LOG("vnode  act: %#x dvp: %p vp: %p %d %s uid: %u pid: %d %s",
-                act, dvp, vp, vnode_vtype(vp), vpath.path, uid, pid, pcomm);
+    str = vn_act_str(act, vp);
+    LOG("vnode  act: %#x(%s) dvp: %p vp: %p %d %s uid: %u pid: %d %s",
+        act, str, dvp, vp, vnode_vtype(vp), vpath.path, uid, pid, pcomm);
+    util_mfree(str);
 
     _FREE(vpath.path, M_TEMP);
 out_put:
