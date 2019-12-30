@@ -121,6 +121,17 @@ out_put:
     return KAUTH_RESULT_DEFER;
 }
 
+static inline const char *process_action_str(kauth_action_t act)
+{
+    switch (act) {
+    case KAUTH_PROCESS_CANSIGNAL:
+        return "CANSIGNAL";
+    case KAUTH_PROCESS_CANTRACE:
+        return "CANTRACE";
+    }
+    return "(?)";
+}
+
 static int process_scope_cb(
         kauth_cred_t cred,
         void *idata,
@@ -148,23 +159,23 @@ static int process_scope_cb(
     proc_selfname(pcomm, sizeof(pcomm));
 
     switch (act) {
-    case KAUTH_PROCESS_CANTRACE:
-        proc = (proc_t) arg0;
-        pid2 = proc_pid(proc);
-        proc_name(pid2, pcomm2, sizeof(pcomm2));
-
-        LOG("process  act: %#x(can_trace) uid: %u pid: %d %s dst: %d %s",
-                    act, uid, pid, pcomm, pid2, pcomm2);
-        break;
-
     case KAUTH_PROCESS_CANSIGNAL:
         proc = (proc_t) arg0;
         signal = (int) arg1;
         pid2 = proc_pid(proc);
         proc_name(pid2, pcomm2, sizeof(pcomm2));
 
-        LOG("process  act: %#x(can_signal) uid: %u pid: %d %s dst: %d %s sig: %d",
-                    act, uid, pid, pcomm, pid2, pcomm2, signal);
+        LOG("process  act: %#x(%s) uid: %u pid: %d %s dst: %d %s sig: %d",
+            act, process_action_str(act), uid, pid, pcomm, pid2, pcomm2, signal);
+        break;
+
+    case KAUTH_PROCESS_CANTRACE:
+        proc = (proc_t) arg0;
+        pid2 = proc_pid(proc);
+        proc_name(pid2, pcomm2, sizeof(pcomm2));
+
+        LOG("process  act: %#x(%s) uid: %u pid: %d %s dst: %d %s",
+            act, process_action_str(act), uid, pid, pcomm, pid2, pcomm2);
         break;
 
     default:
@@ -227,6 +238,32 @@ out_put:
     return KAUTH_RESULT_DEFER;
 }
 
+static inline const char *fileop_action_str(kauth_action_t act)
+{
+    switch (act) {
+    case KAUTH_FILEOP_OPEN:
+        return "OPEN";
+    case KAUTH_FILEOP_CLOSE:
+        return "CLOSE";
+    case KAUTH_FILEOP_RENAME:
+        return "RENAME";
+    case KAUTH_FILEOP_EXCHANGE:
+        return "EXCHANGE";
+    case KAUTH_FILEOP_LINK:
+        return "LINK";
+    case KAUTH_FILEOP_EXEC:
+        return "EXEC";
+    case KAUTH_FILEOP_DELETE:
+        return "DELETE";
+#if OS_VER_MIN_REQ >= __MAC_10_14
+    /* First introduced in macOS 10.14 */
+    case KAUTH_FILEOP_WILL_RENAME:
+        return "WILL_RENAME";
+#endif
+    }
+    return "?";
+}
+
 /*
  * [sic Technical Note TN2127 Kernel Authorization#File Operation Scope]
  *
@@ -275,8 +312,8 @@ static int fileop_scope_cb(
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
 
-        LOG("fileop  act: %#x(open) vp: %p %d %s uid: %u pid: %d %s",
-                    act, vp, vnode_vtype(vp), path1, uid, pid, pcomm);
+        LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
     case KAUTH_FILEOP_CLOSE:
@@ -284,48 +321,48 @@ static int fileop_scope_cb(
         path1 = (char *) arg1;
         flags = (int) arg2;
 
-        LOG("fileop  act: %#x(close) vp: %p %d %s flags: %#x uid: %u pid: %d %s",
-                    act, vp, vnode_vtype(vp), path1, flags, uid, pid, pcomm);
+        LOG("fileop  act: %#x(%s) vp: %p %d %s flags: %#x uid: %u pid: %d %s",
+            act, fileop_action_str(act), vp, vnode_vtype(vp), path1, flags, uid, pid, pcomm);
         break;
 
     case KAUTH_FILEOP_RENAME:
         path1 = (char * _Nullable) arg0;
         path2 = (char * _Nullable) arg1;
 
-        LOG("fileop  act: %#x(rename) %s -> %s uid: %u pid: %d %s",
-                    act, path1, path2, uid, pid, pcomm);
+        LOG("fileop  act: %#x(%s) %s -> %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), path1, path2, uid, pid, pcomm);
         break;
 
     case KAUTH_FILEOP_EXCHANGE:
         path1 = (char *) arg0;
         path2 = (char *) arg1;
 
-        T_LOG("fileop  act: %#x(xchg) %s <=> %s uid: %u pid: %d %s",
-                    act, path1, path2, uid, pid, pcomm);
+        T_LOG("fileop  act: %#x(%s) %s <=> %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), path1, path2, uid, pid, pcomm);
         break;
 
     case KAUTH_FILEOP_LINK:
         path1 = (char * _Nullable) arg0;
         path2 = (char * _Nullable) arg1;
 
-        T_LOG("fileop  act: %#x(link) %s ~> %s uid: %u pid: %d %s",
-                    act, path1, path2, uid, pid, pcomm);
+        T_LOG("fileop  act: %#x(%s) %s ~> %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), path1, path2, uid, pid, pcomm);
         break;
 
     case KAUTH_FILEOP_EXEC:
         vp = (vnode_t) arg0;
         path1 = (char * _Nullable) arg1;
 
-        LOG("fileop  act: %#x(exec) vp: %p %d %s uid: %u pid: %d %s",
-                    act, vp, vnode_vtype(vp), path1, uid, pid, pcomm);
+        LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
     case KAUTH_FILEOP_DELETE:
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
 
-        LOG("fileop  act: %#x(del) vp: %p %d %s uid: %u pid: %d %s",
-                    act, vp, vnode_vtype(vp), path1, uid, pid, pcomm);
+        LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
 #if OS_VER_MIN_REQ >= __MAC_10_14
@@ -334,8 +371,8 @@ static int fileop_scope_cb(
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
         path2 = (char *) arg2;
-        LOG("fileop  act: %#x(will_rename) vp: %p %d %s -> %s uid: %u pid: %d %s",
-                    act, vp, vnode_vtype(vp), path1, path2, uid, pid, pcomm);
+        LOG("fileop  act: %#x(%s) vp: %p %d %s -> %s uid: %u pid: %d %s",
+            act, fileop_action_str(act), vp, vnode_vtype(vp), path1, path2, uid, pid, pcomm);
         break;
 #endif
 
