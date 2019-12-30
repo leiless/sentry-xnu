@@ -237,7 +237,7 @@ out_put:
 #define GET_TYPE_STR     0
 #define GET_TYPE_LEN     1
 
-static inline void *vnode_action_str_one(
+static inline void *vn_act_str_one(
         int type,
         kauth_action_t a,
         bool isdir)
@@ -282,7 +282,7 @@ static inline int ffs_zero(int x)
  *              NULL if OOM
  *              You're responsible to free the space via util_mfree()
  */
-static inline char * __nullable vnode_action_str(kauth_action_t act, vnode_t vp)
+static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
 {
     kauth_action_t a;
     int i, n;
@@ -300,7 +300,7 @@ static inline char * __nullable vnode_action_str(kauth_action_t act, vnode_t vp)
     a = act;
     n = 1;
     do {
-        n += (int) vnode_action_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
+        n += (int) vn_act_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
         a &= (a - 1);
         if (a != 0) n++;    /* Add a pipe separator */
     } while (a != 0);
@@ -312,7 +312,7 @@ static inline char * __nullable vnode_action_str(kauth_action_t act, vnode_t vp)
     i = 0;
     p = str + i;
     do {
-        i += snprintf(p + i, n - i, "%s", vnode_action_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
+        i += snprintf(p + i, n - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
         kassert_gt(i, 0, "%d", "%d");
         a &= (a - 1);
         p += i;
