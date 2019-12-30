@@ -93,6 +93,15 @@ out_exit:
     return (vnode_path_t) {e, len, path};
 }
 
+static inline const char *generic_action_str(kauth_action_t act)
+{
+    switch (act) {
+    case KAUTH_GENERIC_ISSUSER:
+        return "ISSUSER";
+    }
+    return "(?)";
+}
+
 static int generic_scope_cb(
         kauth_cred_t cred,
         void *idata,
@@ -114,7 +123,8 @@ static int generic_scope_cb(
     pid = proc_selfpid();
     proc_selfname(pcomm, sizeof(pcomm));
 
-    LOG("generic  act: %#x uid: %u pid: %d %s", act, uid, pid, pcomm);
+    LOG("generic  act: %#x(%s) uid: %u pid: %d %s",
+        act, generic_action_str(act), uid, pid, pcomm);
 
 out_put:
     (void) kcb_put();
