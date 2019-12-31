@@ -332,6 +332,7 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
     } while (a != 0);
 
     kassert_eq(i + 1, size, "%d", "%d");
+    kassert_eq(str[i], '\0', "%#x", "%#x");
 out_exit:
     return str;
 }
