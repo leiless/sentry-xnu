@@ -15,8 +15,8 @@
 #include "sentry.h"
 #include "sentry_xnu.h"
 
-#define __T_LOG(flags, fmt, ...)    \
-    do {                            \
+#define __T_LOG(flags, fmt, ...)            \
+    do {                                    \
         printf_no_hide_ptr(KEXTNAME_S ": " fmt " <%s@%s()#%d>\n", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);            \
         kassert_nonnull(sentry_handle);     \
         sentry_capture_message(sentry_handle, flags, fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);    \
@@ -198,42 +198,6 @@ out_put:
     return KAUTH_RESULT_DEFER;
 }
 
-#if 0
-
-#define KAUTH_VNODE_READ_DATA            (1<<1)
-#define KAUTH_VNODE_LIST_DIRECTORY        KAUTH_VNODE_READ_DATA
-
-#define KAUTH_VNODE_WRITE_DATA            (1<<2)
-#define KAUTH_VNODE_ADD_FILE            KAUTH_VNODE_WRITE_DATA
-
-#define KAUTH_VNODE_EXECUTE            (1<<3)
-#define KAUTH_VNODE_SEARCH            KAUTH_VNODE_EXECUTE
-
-#define KAUTH_VNODE_DELETE            (1<<4)
-
-#define KAUTH_VNODE_APPEND_DATA            (1<<5)
-#define KAUTH_VNODE_ADD_SUBDIRECTORY        KAUTH_VNODE_APPEND_DATA
-
-#define KAUTH_VNODE_DELETE_CHILD        (1<<6)
-#define KAUTH_VNODE_READ_ATTRIBUTES        (1<<7)
-#define KAUTH_VNODE_WRITE_ATTRIBUTES        (1<<8)
-#define KAUTH_VNODE_READ_EXTATTRIBUTES        (1<<9)
-#define KAUTH_VNODE_WRITE_EXTATTRIBUTES        (1<<10)
-#define KAUTH_VNODE_READ_SECURITY        (1<<11)
-#define KAUTH_VNODE_WRITE_SECURITY        (1<<12)
-
-#define KAUTH_VNODE_TAKE_OWNERSHIP        (1<<13)
-#define KAUTH_VNODE_CHANGE_OWNER        KAUTH_VNODE_TAKE_OWNERSHIP
-
-#define KAUTH_VNODE_SYNCHRONIZE            (1<<20)
-#define KAUTH_VNODE_LINKTARGET            (1<<25)
-#define KAUTH_VNODE_CHECKIMMUTABLE        (1<<26)
-#define KAUTH_VNODE_ACCESS            (1<<31)
-#define KAUTH_VNODE_NOIMMUTABLE            (1<<30)
-#define KAUTH_VNODE_SEARCHBYANYONE        (1<<29)
-
-#endif
-
 #define GET_TYPE_STR     0
 #define GET_TYPE_LEN     1
 
@@ -261,9 +225,58 @@ static inline void *vn_act_str_one(
         BUILD_BUG_ON(KAUTH_VNODE_EXECUTE != KAUTH_VNODE_SEARCH);
         p = isdir ? "SEARCH" : "EXECUTE";
         break;
-    // TODO
+    case KAUTH_VNODE_DELETE:
+        p = "DELETE";
+        break;
+    case KAUTH_VNODE_APPEND_DATA:
+        BUILD_BUG_ON(KAUTH_VNODE_APPEND_DATA != KAUTH_VNODE_ADD_SUBDIRECTORY);
+        p = isdir ? "ADD_SUBDIRECTORY" : "APPEND_DATA";
+        break;
+    case KAUTH_VNODE_DELETE_CHILD:
+        p = "DELETE_CHILD";
+        break;
+    case KAUTH_VNODE_READ_ATTRIBUTES:
+        p = "READ_ATTRIBUTES";
+        break;
+    case KAUTH_VNODE_WRITE_ATTRIBUTES:
+        p = "WRITE_ATTRIBUTES";
+        break;
+    case KAUTH_VNODE_READ_EXTATTRIBUTES:
+        p = "READ_EXTATTRIBUTES";
+        break;
+    case KAUTH_VNODE_WRITE_EXTATTRIBUTES:
+        p = "WRITE_EXTATTRIBUTES";
+        break;
+    case KAUTH_VNODE_READ_SECURITY:
+        p = "READ_SECURITY";
+        break;
+    case KAUTH_VNODE_WRITE_SECURITY:
+        p = "WRITE_SECURITY";
+        break;
+    case KAUTH_VNODE_TAKE_OWNERSHIP:
+        BUILD_BUG_ON(KAUTH_VNODE_TAKE_OWNERSHIP != KAUTH_VNODE_CHANGE_OWNER);
+        p = "TAKE_OWNERSHIP";
+        break;
+    case KAUTH_VNODE_SYNCHRONIZE:
+        p = "SYNCHRONIZE";
+        break;
+    case KAUTH_VNODE_LINKTARGET:
+        p = "LINKTARGET";
+        break;
+    case KAUTH_VNODE_CHECKIMMUTABLE:
+        p = "CHECKIMMUTABLE";
+        break;
+    case KAUTH_VNODE_ACCESS:
+        p = "ACCESS";
+        break;
+    case KAUTH_VNODE_NOIMMUTABLE:
+        p = "NOIMMUTABLE";
+        break;
+    case KAUTH_VNODE_SEARCHBYANYONE:
+        p = "SEARCHBYANYONE";
+        break;
     default:
-        panicf("Unrecognized vnode action %#x", a);
+        panicf("Unrecognized vnode action bit %#x", a);
     }
 
     return type == GET_TYPE_STR ? p : (void *) strlen(p);
