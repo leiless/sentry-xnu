@@ -298,9 +298,9 @@ static inline int ffs_zero(int x)
 static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
 {
     kauth_action_t a;
-    int i, n, size;
     bool isdir;
-    char *str, *p;
+    int i, n, size;
+    char *str;
 
     kassert_nonnull(vp);
 
@@ -323,14 +323,12 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
 
     a = act;
     i = 0;
-    p = str + i;
     do {
-        n = snprintf(p + i, size - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
+        n = snprintf(str + i, size - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
         kassert_gt(n, 0, "%d", "%d");
         i += n;
         a &= (a - 1);
-        p += i;
-        if (a != 0) p[i++] = '|';
+        if (a != 0) str[i++] = '|';
     } while (a != 0);
 
     kassert_eq(i + 1, size, "%d", "%d");
