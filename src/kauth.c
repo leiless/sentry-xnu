@@ -276,7 +276,9 @@ static inline void *vn_act_str_one(
         p = "SEARCHBYANYONE";
         break;
     default:
-        panicf("Unrecognized vnode action bit %#x", a);
+        /* Fallback: use question mark for unrecognized bit */
+        p = "?";
+        break;
     }
 
     return type == GET_TYPE_STR ? p : (void *) strlen(p);
@@ -329,31 +331,35 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
 
     isdir = vnode_isdir(vp);
 
+#if 0
     /* Do basic action sanity check */
     if (act & ~KAUTH_VNODE_ALL_BITS) return "(?)";
     if (act == 0) return "";
+#endif
 
     a = act;
     size = 1;
-    do {
+    while (a != 0) {
         size += (int) vn_act_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
         a &= (a - 1);
         if (a != 0) size++;    /* Add a pipe separator */
-    } while (a != 0);
+    }
 
     str = util_malloc0(size, M_WAITOK | M_NULL);
     if (str == NULL) goto out_exit;
 
     a = act;
     i = 0;
-    do {
+    while (a != 0) {
         n = snprintf(str + i, size - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
         kassert_gt(n, 0, "%d", "%d");
         i += n;
         a &= (a - 1);
         if (a != 0) str[i++] = '|';
-    } while (a != 0);
+    }
 
+    /* In case act is zero, we have to terminate the string manually */
+    if (size == 1) *str = '\0';
     kassert_eq(i + 1, size, "%d", "%d");
     kassert_eq(str[i], '\0', "%#x", "%#x");
 out_exit:
