@@ -312,7 +312,7 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
     size = 1;
     while (a != 0) {
         size += (int) vn_act_str_one(GET_TYPE_LEN, 1 << ffs_zero(a), isdir);
-        a &= (a - 1);
+        a &= a - 1;
         if (a != 0) size++;    /* Add a pipe separator */
     }
 
@@ -325,7 +325,7 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
         n = snprintf(str + i, size - i, "%s", vn_act_str_one(GET_TYPE_STR, 1 << ffs_zero(a), isdir));
         kassert_gt(n, 0, "%d", "%d");
         i += n;
-        a &= (a - 1);
+        a &= a - 1;
         if (a != 0) str[i++] = '|';
     }
 
@@ -354,6 +354,7 @@ static int vnode_scope_cb(
     int pid;
     char pcomm[MAXCOMLEN + 1];
     char *str;
+    enum vtype vt;
 
     vnode_path_t vpath;
 
@@ -371,17 +372,16 @@ static int vnode_scope_cb(
     proc_selfname(pcomm, sizeof(pcomm));
 
     vpath = make_vnode_path(vp);
+    vt = vnode_vtype(vp);
     if (vpath.e != 0) {
-        enum vtype vt;
-        vt = vnode_vtype(vp);
         T_LOG_ERR("make_vnode_path() fail  error: %d vp: %p vid: %#x vt: %d %s",
                     vpath.e, vp, vnode_vid(vp), vt, vtype_string(vt));
         goto out_put;
     }
 
     str = vn_act_str(act, vp);
-    LOG("vnode  act: %#x(%s) dvp: %p vp: %p %d %s uid: %u pid: %d %s",
-        act, str, dvp, vp, vnode_vtype(vp), vpath.path, uid, pid, pcomm);
+    LOG("vnode  act: %#x(%s) vp: %p %d %s %s dvp: %p uid: %u pid: %d %s",
+        act, str, vp, vt, vtype_string(vt), vpath.path, dvp, uid, pid, pcomm);
     util_mfree(str);
 
     _FREE(vpath.path, M_TEMP);
