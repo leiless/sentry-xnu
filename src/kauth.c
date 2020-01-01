@@ -290,29 +290,6 @@ static inline int ffs_zero(int x)
     return __builtin_ffs(x) - 1;
 }
 
-/* 0, 1, [1<<14, 1<<19], [1<<21, 1<<24], [1<<27, 1<<29] currently unused */
-#define KAUTH_VNODE_ALL_BITS    (   \
-    KAUTH_VNODE_READ_DATA           |   \
-    KAUTH_VNODE_WRITE_DATA          |   \
-    KAUTH_VNODE_EXECUTE             |   \
-    KAUTH_VNODE_DELETE              |   \
-    KAUTH_VNODE_APPEND_DATA         |   \
-    KAUTH_VNODE_DELETE_CHILD        |   \
-    KAUTH_VNODE_READ_ATTRIBUTES     |   \
-    KAUTH_VNODE_WRITE_ATTRIBUTES    |   \
-    KAUTH_VNODE_READ_EXTATTRIBUTES  |   \
-    KAUTH_VNODE_WRITE_EXTATTRIBUTES |   \
-    KAUTH_VNODE_READ_SECURITY       |   \
-    KAUTH_VNODE_WRITE_SECURITY      |   \
-    KAUTH_VNODE_TAKE_OWNERSHIP      |   \
-    KAUTH_VNODE_SYNCHRONIZE         |   \
-    KAUTH_VNODE_LINKTARGET          |   \
-    KAUTH_VNODE_CHECKIMMUTABLE      |   \
-    KAUTH_VNODE_ACCESS              |   \
-    KAUTH_VNODE_NOIMMUTABLE         |   \
-    KAUTH_VNODE_SEARCHBYANYONE      \
-)
-
 /**
  * Format vnode action into string
  * @action      The vnode action
@@ -330,12 +307,6 @@ static inline char * __nullable vn_act_str(kauth_action_t act, vnode_t vp)
     kassert_nonnull(vp);
 
     isdir = vnode_isdir(vp);
-
-#if 0
-    /* Do basic action sanity check */
-    if (act & ~KAUTH_VNODE_ALL_BITS) return "(?)";
-    if (act == 0) return "";
-#endif
 
     a = act;
     size = 1;
