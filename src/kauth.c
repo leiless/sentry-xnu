@@ -19,11 +19,11 @@
     do {                                    \
         printf_no_hide_ptr(KEXTNAME_S ": " fmt " <%s@%s()#%d>\n", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);            \
         kassert_nonnull(sentry_handle);     \
-        sentry_capture_message(sentry_handle, flags, fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);    \
+        sentry_capture_exception(sentry_handle, flags, fmt " <%s@%s()#%d>", ##__VA_ARGS__, __BASE_FILE__, __func__, __LINE__);  \
     } while (0)
 
 #define T_LOG(fmt, ...)         __T_LOG(SEL_INF, "[INF] " fmt, ##__VA_ARGS__)
-#define T_LOG_WARN(fmt, ...)    __T_LOG(SEL_WAN, "[WARN] " fmt, ##__VA_ARGS__)
+#define T_LOG_WARN(fmt, ...)    __T_LOG(SEL_WRN, "[WARN] " fmt, ##__VA_ARGS__)
 #define T_LOG_ERR(fmt, ...)     __T_LOG(SEL_ERR, "[ERR] " fmt, ##__VA_ARGS__)
 #define T_LOG_BUG(fmt, ...)    	__T_LOG(SEL_FTL, "[BUG] " fmt, ##__VA_ARGS__)
 #define T_LOG_TRACE(fmt, ...)   __T_LOG(SEL_DBG, "[TRACE] " fmt, ##__VA_ARGS__)
@@ -123,7 +123,7 @@ static int generic_scope_cb(
     pid = proc_selfpid();
     proc_selfname(pcomm, sizeof(pcomm));
 
-    LOG("generic  act: %#x(%s) uid: %u pid: %d %s",
+    T_LOG_TRACE("generic  act: %#x(%s) uid: %u pid: %d %s",
         act, generic_action_str(act), uid, pid, pcomm);
 
 out_put:
@@ -175,7 +175,7 @@ static int process_scope_cb(
         pid2 = proc_pid(proc);
         proc_name(pid2, pcomm2, sizeof(pcomm2));
 
-        LOG("process  act: %#x(%s) uid: %u pid: %d %s dst: %d %s sig: %d",
+        T_LOG("process  act: %#x(%s) uid: %u pid: %d %s dst: %d %s sig: %d",
             act, process_action_str(act), uid, pid, pcomm, pid2, pcomm2, signal);
         break;
 
@@ -184,7 +184,7 @@ static int process_scope_cb(
         pid2 = proc_pid(proc);
         proc_name(pid2, pcomm2, sizeof(pcomm2));
 
-        LOG("process  act: %#x(%s) uid: %u pid: %d %s dst: %d %s",
+        T_LOG_WARN("process  act: %#x(%s) uid: %u pid: %d %s dst: %d %s",
             act, process_action_str(act), uid, pid, pcomm, pid2, pcomm2);
         break;
 
@@ -380,7 +380,7 @@ static int vnode_scope_cb(
     }
 
     str = vn_act_str(act, vp);
-    LOG("vnode  act: %#x(%s) vp: %p %d %s %s dvp: %p uid: %u pid: %d %s",
+    T_LOG("vnode  act: %#x(%s) vp: %p %d %s %s dvp: %p uid: %u pid: %d %s",
         act, str, vp, vt, vtype_string(vt), vpath.path, dvp, uid, pid, pcomm);
     util_mfree(str);
 
@@ -464,7 +464,7 @@ static int fileop_scope_cb(
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
 
-        LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
             act, fileop_action_str(act), vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
@@ -473,7 +473,7 @@ static int fileop_scope_cb(
         path1 = (char *) arg1;
         flags = (int) arg2;
 
-        LOG("fileop  act: %#x(%s) vp: %p %d %s flags: %#x uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(%s) vp: %p %d %s flags: %#x uid: %u pid: %d %s",
             act, fileop_action_str(act), vp, vnode_vtype(vp), path1, flags, uid, pid, pcomm);
         break;
 
@@ -481,7 +481,7 @@ static int fileop_scope_cb(
         path1 = (char * _Nullable) arg0;
         path2 = (char * _Nullable) arg1;
 
-        LOG("fileop  act: %#x(%s) %s -> %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(%s) %s -> %s uid: %u pid: %d %s",
             act, fileop_action_str(act), path1, path2, uid, pid, pcomm);
         break;
 
@@ -505,7 +505,7 @@ static int fileop_scope_cb(
         vp = (vnode_t) arg0;
         path1 = (char * _Nullable) arg1;
 
-        LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
             act, fileop_action_str(act), vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
@@ -513,7 +513,7 @@ static int fileop_scope_cb(
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
 
-        LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(%s) vp: %p %d %s uid: %u pid: %d %s",
             act, fileop_action_str(act), vp, vnode_vtype(vp), path1, uid, pid, pcomm);
         break;
 
@@ -523,13 +523,13 @@ static int fileop_scope_cb(
         vp = (vnode_t) arg0;
         path1 = (char *) arg1;
         path2 = (char *) arg2;
-        LOG("fileop  act: %#x(%s) vp: %p %d %s -> %s uid: %u pid: %d %s",
+        T_LOG("fileop  act: %#x(%s) vp: %p %d %s -> %s uid: %u pid: %d %s",
             act, fileop_action_str(act), vp, vnode_vtype(vp), path1, path2, uid, pid, pcomm);
         break;
 #endif
 
     default:
-        T_LOG_ERR("unknown action %#x in fileop scope", act);
+        T_LOG_BUG("unknown action %#x in fileop scope", act);
         break;
     }
 

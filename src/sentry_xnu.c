@@ -15,7 +15,7 @@
 #ifndef SENTRY_DSN_TEST
 #error Please define SENTRY_DSN_TEST macro in Makefile.inc
 #endif
-#define SAMPLE_RATE_TEST    100
+#define SAMPLE_RATE_TEST    1
 
 static void * __nullable sentry_test_new(kmod_info_t * __nullable ki)
 {
