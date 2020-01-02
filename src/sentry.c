@@ -295,6 +295,8 @@ static void parse_http_response(sentry_t *h, const char *str)
 
 #define BUFSZ           2048
 
+static int socket_connect_core(sentry_t *);
+
 /**
  * Socket upcall function will be called:
  *  when there is data more than the low water mark for reading,
@@ -321,7 +323,10 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
 
     if (sentry_counter_get(h) < 0) return;
 
-    kassertf(so == h->so, "[upcall] Bad cookie  %p vs %p", so, h->so);
+    //kassertf(so == h->so, "[upcall] Bad cookie  %p vs %p", so, h->so);
+    if (h->so != so) {
+        LOG_WARN("[upcall] Socket changed  %p vs %p", h->so, so);
+    }
 
     if (!sock_isconnected(so)) {
         optval = 0;
@@ -331,7 +336,11 @@ static void so_upcall(socket_t so, void *cookie, int waitf)
         kassertf(e == 0, "[upcall] sock_getsockopt() SO_ERROR fail  errno: %d", e);
         LOG_ERR("[upcall] socket not connected  errno: %d", optval);
 
-        (void) OSBitAndAtomic(0, &h->connected);
+        if (OSBitAndAtomic(0, &h->connected)) {
+            LOG_ERR("[upcall] reconnecting socket...");
+            e = socket_connect_core(h);
+            if (e != 0) LOG_ERR("socket_connect_core() fail  errno: %d", e);
+        }
         goto out_put;
     } else {
         if (OSCompareAndSwap(0, 1, &h->connected)) {
@@ -850,6 +859,62 @@ out_free:
 out_oom:
     kassert_ne(e, 0, "%d", "%d");
     goto out_exit;
+}
+
+static int socket_connect_core(sentry_t *h)
+{
+    int e;
+    socket_t so;
+    struct timeval tv;
+    struct sockaddr_in sin;
+
+    kassert_nonnull(h);
+
+    e = sock_socket(PF_INET, SOCK_STREAM, IPPROTO_IP, so_upcall, h, &so);
+    if (e != 0) goto out_socket;
+
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    e = so_set_common_options(so, tv, 1);
+    if (e != 0) goto out_setsockopt;
+
+    bzero(&sin, sizeof(sin));
+    /*
+     * XXX:
+     *  (struct sockaddr).sin_len must be sizeof(struct sockaddr)
+     *  otherwise sock_connect() will return EINVAL
+     *
+     * see:
+     *  xnu/bsd/kern/kpi_socket.c#sock_connect
+     *  xnu/bsd/kern/uipc_socket.c#soconnectlock
+     *  xnu/bsd/netinet/raw_ip.c#rip_usrreqs, rip_connect
+     */
+    sin.sin_len = sizeof(sin);
+    sin.sin_family = PF_INET;
+    sin.sin_port = htons(h->port);
+    sin.sin_addr = h->ip;
+    e = sock_connect(so, (struct sockaddr *) &sin, MSG_DONTWAIT);
+    if (e != 0) {
+        /* XXX: EINPROGRESS still possible when MSG_DONTWAIT is not specified */
+        if (e != EINPROGRESS) goto out_socket;
+        e = 0;  /* Reset errno */
+    }
+
+    lck_rw_lock_exclusive(h->lck_rw);
+    /* XXX:
+     *  we must turn off SO_UPCALLCLOSEWAIT on h->so before so_destroy()
+     *  otherwise there is a deadlock bug
+     */
+    //so_destroy(h->so, SHUT_RDWR);
+
+    h->so = so;
+    lck_rw_unlock_exclusive(h->lck_rw);
+
+    return 0;
+out_setsockopt:
+    so_destroy(so, SHUT_RDWR);
+out_socket:
+    return e;
 }
 
 void sentry_destroy(void * __nullable handle)

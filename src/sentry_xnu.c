@@ -63,7 +63,9 @@ kern_return_t sentry_xnu_stop(kmod_info_t *ki, void *d)
 
 #ifdef DEBUG
     /* Order matters, KAuth must be deregister before Sentry */
+    LOG_DBG("Deregister KAuth...");
     kauth_deregister();
+    LOG_DBG("Destroy Sentry...");
     sentry_destroy(sentry_handle);
 #endif
 
