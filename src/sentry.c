@@ -500,6 +500,9 @@ static void ctx_populate_kmod_info(cJSON *contexts, kmod_info_t * __nullable ki)
             kassert_nonnull(k);
 
             (void) find_LC_UUID(k->address, k->size, MACHO_SET_UUID_FAIL, uuid);
+            if (uuid_string_is_null(uuid)) {
+                (void) strlcpy(uuid, "0", sizeof(uuid));
+            }
             n = snprintf(buf, sizeof(buf), "%u: %#lx %#lx %s %s (%s)",
                     k->id, k->address, k->size, uuid, k->name, k->version);
             kassert(n > 0);

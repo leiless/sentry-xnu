@@ -346,6 +346,15 @@ void uuid_string_generate(uuid_string_t out)
     uuid_unparse_lower(u, out);
 }
 
+#define UUID_STRING_NULL    "00000000-0000-0000-0000-000000000000"
+
+bool uuid_string_is_null(uuid_string_t str)
+{
+    kassert_nonnull(str);
+    BUILD_BUG_ON(ARRAY_SIZE(UUID_STRING_NULL) != sizeof(uuid_string_t));
+    return !strcmp(str, UUID_STRING_NULL);
+}
+
 /**
  * Pseudo strtod() in kernel
  * The fractional part always ignored
