@@ -825,7 +825,7 @@ int sentry_new(
     sin.sin_port = htons(h->port);
     sin.sin_addr = h->ip;
 
-#if 1
+#if 0
     e = sock_connect(h->so, (struct sockaddr *) &sin, MSG_DONTWAIT);
     if (e != 0) {
         if (e != EINPROGRESS) goto out_socket;
@@ -844,7 +844,10 @@ int sentry_new(
 
 #else
     e = sock_connect(h->so, (struct sockaddr *) &sin, 0);
-    if (e != 0) goto out_socket;
+    if (e != 0) {
+        if (e != EINPROGRESS) goto out_socket;
+        e = 0;  /* EINPROGRESS still possible when MSG_DONTWAIT not specified */
+    }
 #endif
 
     sentry_debug(h);
