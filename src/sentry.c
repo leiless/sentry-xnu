@@ -824,31 +824,12 @@ int sentry_new(
     sin.sin_family = PF_INET;
     sin.sin_port = htons(h->port);
     sin.sin_addr = h->ip;
-
-#if 0
     e = sock_connect(h->so, (struct sockaddr *) &sin, MSG_DONTWAIT);
     if (e != 0) {
+        /* XXX: EINPROGRESS still possible when MSG_DONTWAIT is not specified */
         if (e != EINPROGRESS) goto out_socket;
-        e = 0;  /* Reset when errno = EINPROGRESS */
+        e = 0;
     }
-
-#if 1
-    tv.tv_sec = 3;
-    tv.tv_usec = 0;
-    e = sock_connectwait(h->so, &tv);
-    if (e != 0) {
-        LOG_ERR("sock_connectwait() fail  errno: %d", e);
-        e = 0;  /* Reset errno */
-    }
-#endif
-
-#else
-    e = sock_connect(h->so, (struct sockaddr *) &sin, 0);
-    if (e != 0) {
-        if (e != EINPROGRESS) goto out_socket;
-        e = 0;  /* EINPROGRESS still possible when MSG_DONTWAIT not specified */
-    }
-#endif
 
     sentry_debug(h);
     *handlep = h;
