@@ -841,6 +841,7 @@ int sentry_new(
         e = 0;  /* Reset errno */
     }
 #endif
+
 #else
     e = sock_connect(h->so, (struct sockaddr *) &sin, 0);
     if (e != 0) goto out_socket;
@@ -1206,7 +1207,7 @@ static void capture_message_ap(
 
     t = eid++;
     if (urand32(0, 100) >= h->sample_rate) {
-        LOG_DBG("Event %llx sampled out  flags: %#x fotmat: %s", t, flags, fmt);
+        LOG_DBG("Event %llx sampled out", t);
         return;
     }
 
